@@ -1,7 +1,8 @@
 # AIChatGUI
-[![License](https://img.shields.io/github/license/lryaner/aichat.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.10%2B-green)](https://www.python.org/)
 
-
+[中文文档](README_zh.md) | [English Document](README.md)
 ## 这是什么？
 这是基于[chatgpt](https://chatgpt.com/)的聊天程序，可以用来和chatgpt聊天，也可以从文本生成语音。
 
