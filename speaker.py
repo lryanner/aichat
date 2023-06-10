@@ -37,10 +37,10 @@ class Speaker:
         active_config = self._config.get_active_vits_config()
         emotion_mapping_path = self._emotion_mapping_path
 
-        if active_config.api_type == SpeakerAPIType.NeneEmotion:
+        if active_config.api_type == SpeakerAPIType.NeneEmotion.value:
             self._speaker = SpeakerNeneEmotion(
                 self.join_address(active_config.api_address, active_config.api_port), emotion_mapping_path)
-        elif active_config.api_type == SpeakerAPIType.VitsSimpleAPI:
+        elif active_config.api_type == SpeakerAPIType.VitsSimpleAPI.value:
             self._speaker = SpeakerVitsSimpleApi(
                 self.join_address(active_config.api_address, active_config.api_port), emotion_mapping_path)
 
@@ -184,7 +184,7 @@ class SpeakerVitsSimpleApi(SpeakerW2V2):
         :param text: the text to speak.
         :param kwargs: the arguments for the speaker.
         :param nsfw: [required] whether the text is nsfw. Must be a boolean.
-        :param emotion: [required] the emotion of the speaker. Must be a list of string.
+        :param emotion: [required] the emotion of the speaker. Must be a list of float. The emotion is an ADV model array.
         :return: file_path, emotion_sample
         """
         if 'nsfw' in kwargs:

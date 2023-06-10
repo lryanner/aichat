@@ -878,7 +878,13 @@ class QMessageOverflowButtonsContainer(QWidget):
 
     @is_playing.setter
     def is_playing(self, value):
+        self._play_sound_button.change_button_state(value)
         self._is_playing = value
+        if value:
+            self.show()
+        if not value and not self.parent().is_hover:
+            self.hide()
+
 
     def hide(self) -> None:
         if self._is_playing:

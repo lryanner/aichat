@@ -26,11 +26,10 @@ class PlaySoundEvent(QEvent):
         return self._sound_path
 
 
-class AddNewChatBotEvent(QEvent):
+class AddChatBotEvent(QEvent):
     """
     This event is used to add new chatbot to the chatbot list
-    :param chat_bot_name: the name of the chatbot
-    :param avatar_path: the path to the avatar of the chatbot
+    :param data: chatbot data
     """
 
     def __init__(self, data):
@@ -38,11 +37,29 @@ class AddNewChatBotEvent(QEvent):
         self._data = data
 
     def type(self):
-        return AddNewChatBotEventType
+        return AddChatBotEventType
 
     @property
     def data(self):
         return self._data
+
+
+class DeleteChatBotEvent(QEvent):
+    """
+    This event is used to delete chatbot.
+    :param chatbot_id: the id of the chatbot.
+    """
+
+    def __init__(self, chatbot_id):
+        super().__init__(QEvent.User)
+        self._chatbot_id = chatbot_id
+
+    def type(self):
+        return DeleteChatBotEventType
+
+    @property
+    def chatbot_id(self):
+        return self._chatbot_id
 
 
 class MainWindowHintEvent(QEvent):
@@ -134,28 +151,12 @@ class SaveDataEvent(QEvent):
         return self._data_type
 
 
-class DeleteChatBotEvent(QEvent):
-    """
-    This event is used to delete chatbot
-    :param chatbot_id: the id of the chatbot
-    """
-
-    def __init__(self, chatbot_id):
-        super().__init__(QEvent.User)
-        self._chatbot_id = chatbot_id
-
-    def type(self):
-        return DeleteChatBotEventType
-
-    @property
-    def chatbot_id(self):
-        return self._chatbot_id
-
 class DeleteMessageEvent(QEvent):
     """
     This event is used to delete message
     :param data: the data of the message to be deleted
     """
+
     def __init__(self, history_id, data):
         super().__init__(QEvent.User)
         self._data = data
@@ -178,6 +179,7 @@ class SendMessageEvent(QEvent):
     This event is used to send message.
     :param message: the message to be sent.
     """
+
     def __init__(self, history_id, message):
         super().__init__(QEvent.User)
         self._message = message
@@ -185,6 +187,29 @@ class SendMessageEvent(QEvent):
 
     def type(self):
         return SendMessageEventType
+
+    @property
+    def history_id(self):
+        return self._history_id
+
+    @property
+    def message(self):
+        return self._message
+
+
+class SpeakMessageEvent(QEvent):
+    """
+    This event is used to speak message.
+    :param message: the message to be spoken.
+    :param history_id: the id of the history.
+    """
+    def __init__(self, history_id, message):
+        super().__init__(QEvent.User)
+        self._message = message
+        self._history_id = history_id
+
+    def type(self):
+        return SpeakMessageEventType
 
     @property
     def history_id(self):

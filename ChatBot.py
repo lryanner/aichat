@@ -1,5 +1,6 @@
 import base64
 import datetime
+import weakref
 from functools import total_ordering
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
@@ -7,7 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 import utils
 from data import ChatBotData, ConfigData, ChatBotDataList, MessageData
-from event import SendMessageEvent
+from event import SendMessageEvent, SpeakMessageEvent
 from event_type import SendMessageEventType
 from exceptions import ChatBotException, ChatGPTException
 
@@ -21,10 +22,10 @@ class ChatBotFactory(QObject):
         super().__init__()
         self._chatbots = []
         self._chatbot_data = chatbot_data
+        self._speaker = Speaker(config.vits_config)
         for chatbot in self._chatbot_data:
             self.create_chatbot(chatbot)
         self._config = config
-        self._speaker = Speaker(config.vits_config)
         self.setup_config()
 
     def setup_config(self):
@@ -37,9 +38,22 @@ class ChatBotFactory(QObject):
         :param limit_token: int, the limit token, default 3400.
         """
         # generate id
-        chatbot = ChatBot(chatbot_data, limit_token)
+        chatbot = ChatBot(chatbot_data, self._speaker, limit_token)
         chatbot.sendMessage.connect(self.send_message)
+        chatbot.speak.connect(self.speak_message)
         self._chatbots.append(chatbot)
+
+    def delete_chatbot(self, chatbot_id):
+        """
+        Delete a chatbot with chatbot_id.
+        :param chatbot_id: the chatbot id of the chatbot to delete.
+        :return:
+        """
+        for chatbot in self._chatbots:
+            if chatbot.chatbot_id == chatbot_id:
+                self._chatbots.remove(chatbot)
+                return
+        raise ChatBotException('Chatbot not found.')
 
     def get_chatbot(self, chatbot_id):
         """Returns a chatbot
@@ -56,8 +70,13 @@ class ChatBotFactory(QObject):
     def send_message(self, history_id, message: MessageData):
         QApplication.sendEvent(self, SendMessageEvent(history_id, message))
 
+    def speak_message(self, history_id, message: MessageData):
+        QApplication.sendEvent(self, SpeakMessageEvent(history_id, message))
+
+
 class ChatThread(QThread):
-    sendMessage= Signal(str, MessageData)
+    sendMessage = Signal(str, MessageData) # history id, message data
+
     def __init__(self, history_id, chatbot_data):
         super().__init__()
         self._history_id = history_id
@@ -97,17 +116,39 @@ class ChatThread(QThread):
         )
         self._chatbot_data.append_message(response, self._history_id)
         self.sendMessage.emit(self._history_id, response)
+
+
+class SpeakThread(QThread):
+    speak = Signal(MessageData)
+    def __init__(self, message_data: MessageData, speaker: Speaker):
+        super().__init__()
+        self._message_data = message_data
+        self._speaker = speaker
+
+    def run(self) -> None:
+        emotion, nsfw = ChatBot.get_adv_emotion_from_gpt(self._message_data.message)
+        if not emotion:
+            raise ChatGPTException('No emotion detected.')
+        path, emotion_sample = self._speaker.speak(self._message_data.message, id_=3, emotion=emotion, nsfw=nsfw)
+        # rename the path to message_id
+        utils.rename_file(path, self._message_data.message_id + '.wav')
+        self.speak.emit(self._message_data)
+
+
 class ChatBot(QObject):
     """The chatbot"""
-    sendMessage= Signal(str, MessageData)
+    sendMessage = Signal(str, MessageData) # history id, message data
+    speak = Signal(str, MessageData) # history id, message data
 
-    def __init__(self, chatbot_data: ChatBotData, limit_token=3400):
+    def __init__(self, chatbot_data: ChatBotData, speaker, limit_token=3400):
         """Sets the chatbot
         :param chatbot_data: ChatBotData, the chatbot data
         :param limit_token: int, the limit token, default 3400"""
         super().__init__()
         self._chatbot_data: ChatBotData = chatbot_data
-        self._thread = None
+        self._speaker = speaker
+        self._chat_thread = None
+        self._speak_thread = None
 
     @property
     def chatbot_id(self):
@@ -117,9 +158,17 @@ class ChatBot(QObject):
     def receive_message(self, history_id):
         """Uses openai module to chat"""
         # use a thread to chat
-        self._thread = ChatThread(history_id, self._chatbot_data)
-        self._thread.sendMessage.connect(self.sendMessage)
-        self._thread.start()
+        self._chat_thread = ChatThread(history_id, self._chatbot_data)
+        self._chat_thread.sendMessage.connect(self.speak_it)
+        self._chat_thread.start()
+
+    @Slot(str, MessageData)
+    def speak_it(self, history_id, message_data: MessageData):
+        """Speaks the message"""
+        self.sendMessage.emit(history_id, message_data)
+        self._speak_thread = SpeakThread(message_data, self._speaker)
+        self._speak_thread.speak.connect(lambda : self.speak.emit(history_id, message_data))
+        self._speak_thread.start()
 
     def summarize(self):
         """Summarizes the chat history"""
@@ -188,8 +237,7 @@ class ChatBot(QObject):
             )
             content = utils.load_json_string(response['choices'][0]['message']['content'])
             utils.warn('Get emotion from gpt: ' + str(content))
-            return [content['arousal'], content['dominance'], content['valence']], False if content[
-                                                                                                'nsfw'] == False else True
+            return [content['arousal'], content['dominance'], content['valence']], content['nsfw']
         except Exception as e:
             utils.warn('Get emotion from gpt failed: ' + str(e) + 'retrying...')
-            return ChatBot.get_adv_emotion_from_gpt(text)
+            return None

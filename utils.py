@@ -71,3 +71,16 @@ def get_similar_array(array, target):
 
 def play_sound(file_name):
     winsound.PlaySound(file_name, winsound.SND_FILENAME)
+
+def rename_file(origin_file_name_with_path, file_name):
+    """
+    Rename the file.
+    :param origin_file_name_with_path: origin file name with path
+    :param file_name: file name without path
+    :return:
+    """
+    import os
+    # get the original file path
+    file_path = os.path.dirname(origin_file_name_with_path)
+    target_file_name_with_path = os.path.join(file_path, file_name)
+    os.rename(origin_file_name_with_path, target_file_name_with_path)
