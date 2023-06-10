@@ -1,2 +1,4 @@
 /save/
 /download/
+/__pycache__/
+/.idea/
