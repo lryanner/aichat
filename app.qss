@@ -1,0 +1,350 @@
+/*******************************QMainWindow*******************************/
+*{
+    background-color: #f2f2f2;
+    margin: 0px;
+    spacing: 0px;
+    font-family: "HarmonyOS Sans SC";
+}
+
+/*main content*/
+#main_widget{
+    background: #FFFFFB;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+}
+QPushButton{
+    font-size: 16px;
+    border: none;
+    background-color: #FFFFFB;
+}
+QMenu{
+    font-size: 16px;
+    background-color: #FFFFFB;
+}
+QMenu::item{
+    background-color: #FFFFFB;
+}
+QMenu::item:selected{
+    background-color: #A5DEE4;
+}
+QPushButton:checked{
+    background-color: #f2f2f2;
+}
+QPushButton:hover{
+    background-color: #f2f2f2;
+}
+#left_bar_add_button{
+    background-color: #FFFFFB;
+    width: 30px;
+    height: 30px;
+}
+#left_bar_add_button:hover{
+    background-color: #FFFFFB;
+}
+#left_bar_add_button:pressed{
+    background-color: #FFFFFB;
+}
+#message_input_box{
+    color: #656765;
+    border-left: 3px solid #f2f2f2;
+    background-color: #FFFFFB;
+    padding: 0px 10px 0px 10px;
+}
+QWidget#left_bar{
+    background-color: #FFFFFB;
+}
+QLabel{
+    background-color: transparent;
+}
+#right_bar{
+    background-color: #FFFFFB;
+}
+#button_area{
+    background-color: #FFFFFB;
+    border-left: 3px solid #f2f2f2;
+    spacing: 10px;
+}
+#button_area QPushButton{
+    width: 100px;
+    height: 30px;
+    border-radius: 10px;
+}
+#chatbot_name_label{
+    font-size: 16px;
+    color: #656765;
+}
+#chatbot_description_label{
+    font-size: 12px;
+    color: #91989F;
+}
+/***************************ChatBot Button***************************/
+#chatbot_button QWidget{
+    background: transparent;
+}
+/*******************************Hint box*******************************/
+#info_hint_box QLabel{
+    font-size: 16px;
+    color: #FFFFFB;
+}
+#warning_hint_box QLabel{
+    font-size: 16px;
+    color: #FFFFFB;
+}
+#error_hint_box QLabel{
+    font-size: 16px;
+    color: #FFFFFB;
+}
+/*******************************Message area*******************************/
+#message_area{
+    background-position: center;
+    background-attachment: fixed;
+}
+#name_label{
+    font-size: 12px;
+    color: #91989F;
+}
+#message_label_reception, #message_label_me{
+    color: #656765;
+    padding: 10px 10px 10px 10px;
+}
+#message_label_reception{
+    border-radius: 15px;
+    border-top-left-radius: 0px;
+    background-color: #A5DEE4;
+}
+#message_label_me{
+    border-radius: 15px;
+    background-color: #FFFFFB;
+    border-top-right-radius: 0px;
+}
+#chatbot_setting_dialog{
+    background-color: #000000;
+    transparent: 0.5;
+}
+
+/*************************Chatbot Setting Dialog*************************/
+#chatbot_setting_dialog *{
+    background: transparent;
+}
+#chatbot_setting_dialog #main_content{
+    background: #FFFFFB;
+    border-radius: 10px;
+}
+#chatbot_setting_dialog #title_bar{
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+#chatbot_setting_dialog #title_label{
+    margin-left: 12px;
+    color: #787878;
+}
+#chatbot_setting_dialog #close_button{
+    background: transparent;
+    border-top-right-radius: 10px;
+    border: none;
+}
+#chatbot_setting_dialog #close_button:hover{
+    background: #FF0000;
+    color: #FFFFFB;
+}
+#chatbot_setting_dialog #setting_area_widget, #chatbot_setting_dialog #setting_area{
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+}
+#chatbot_setting_dialog #label_input_box_container{
+    font-size: 16px;
+}
+#chatbot_setting_dialog #label_with_input_box{
+    font-size: 16px;
+    color: #787878;
+}
+#chatbot_setting_dialog #input_box_with_label,#chatbot_setting_dialog #prompts_plain_text_edit{
+    font-size: 16px;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: 3px solid #f2f2f2;
+    lineedit-password-character: 42;
+}
+#chatbot_setting_dialog #input_box_with_label:hover,#chatbot_setting_dialog #prompts_plain_text_edit:hover{
+    border-bottom: 3px solid #A5DEE4;
+}
+#chatbot_setting_dialog #input_box_with_label:focus,#chatbot_setting_dialog #prompts_plain_text_edit:focus{
+    border-bottom: 3px solid #A5DEE4;
+}
+#chatbot_setting_dialog #label_with_combobox{
+    font-size: 16px;
+    color: #787878;
+}
+#chatbot_setting_dialog #combobox_with_label{
+    font-size: 16px;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: 3px solid #f2f2f2;
+    background-color: #FFFFFB;
+}
+#chatbot_setting_dialog #combobox_with_label:hover{
+    border-bottom: 3px solid #A5DEE4;
+}
+#chatbot_setting_dialog #combobox_with_label::drop-down{
+    border: none;
+}
+#chatbot_setting_dialog #label_with_slider_input_box{
+    font-size: 16px;
+    color: #787878;
+}
+#chatbot_setting_dialog #slider_with_label{
+    font-size: 16px;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    background-color: #FFFFFB;
+}
+#chatbot_setting_dialog #slider_with_label::groove:horizontal{
+    border: 1px solid #A5DEE4;
+    height: 0px;
+    margin: 0px 4px 0px 4px;
+}
+#chatbot_setting_dialog #slider_with_label::handle:horizontal{
+    background: #A5DEE4;
+    border: none;
+    height: 10px;
+    width: 10px;
+    margin: -10px -2px -10px -2px;
+    border-radius: 5px;
+}
+#chatbot_setting_dialog #input_box_with_slider{
+    font-size: 16px;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: 3px solid #f2f2f2;
+    background-color: #FFFFFB;
+}
+#chatbot_setting_dialog #input_box_with_slider:hover{
+    border-bottom: 3px solid #A5DEE4;
+}
+#chatbot_setting_dialog #save_button{
+    background-color: #A5DEE4;
+    border-radius: 10px;
+    border: none;
+    font-size: 16px;
+    color: #656765;
+}
+#chatbot_setting_dialog #save_button:hover{
+    background-color: #2EA9DF;
+    color: #FFFFFB;
+}
+#chatbot_setting_dialog #save_button:pressed{
+    background-color: #1E88A8;
+    color: #BDC0BA;
+}
+#chatbot_setting_dialog #cancel_button{
+    background-color: #f2f2f2;
+    border-radius: 10px;
+    border: none;
+    font-size: 16px;
+    color: #707C74;
+}
+#chatbot_setting_dialog #cancel_button:hover{
+    background-color: #d4d4d4;
+}
+#chatbot_setting_dialog #cancel_button:pressed{
+    background-color: #c7c7c7;
+}
+#setting_area_label{
+    font-size: 16px;
+    color: #787878;
+}
+#name_input_box{
+    text-align: center;
+    max-width: 100px;
+    font-size: 18px;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+/* when the input box is active */
+#name_input_box:focus{
+    border-bottom: 3px solid #A5DEE4;
+}
+#selectable_group_box_button{
+    font-size: 16px;
+    color: #787878;
+    border-bottom: 3px solid #f2f2f2;
+}
+#selectable_group_box_button:hover{
+    color: #0089A7;
+    border-bottom: 3px solid #e0f4f6;
+}
+#selectable_group_box_button:pressed{
+    color: #0089A7;
+    border-bottom: 3px solid #A5DEE4;
+}
+#selectable_group_box_button:checked{
+    color: #0089A7;
+    border-bottom: 3px solid #A5DEE4;
+}
+/**************************QScrollBar Vertical**************************/
+QScrollBar:vertical {
+    background: transparent;
+    border: none;
+    border-image: url(":/imgs/imgs/scrollBar/scroll bar-bg.png");
+    margin: 0px 0px 0px 0px;
+    width: 3px;
+}
+QScrollBar::handle:vertical {
+    background: transparent;
+    border: none;
+    margin: 0px 1px 0px 1px;
+    width: 10px;
+    min-height: 5px;
+    height: 69px;
+}
+QScrollBar::sub-line:vertical {
+    background: transparent;
+    margin: 0px;
+    border-width: 0px;
+    height: 0px;
+    width: 0px;
+    subcontrol-position: top;
+    subcontrol-origin: margin;
+}
+QScrollBar::add-line:vertical {
+    background: transparent;
+    margin: 0px;
+    border-width: 0px;
+    height: 0px;
+    width: 0px;
+    subcontrol-position: bottom;
+    subcontrol-origin: margin;
+}
+QScrollBar::up-arrow:vertical {
+    background: transparent;
+    width: 0px;
+    height: 0px;
+    margin: 0px;
+}
+QScrollBar::down-arrow:vertical {
+    background: transparent;
+    width: 0px;
+    height: 0px;
+    margin: 0px;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}
+QScrollBar::add-line:vertial
+{
+    height: 0px;
+}
+QScrollBar::sub-line:vertial
+{
+    height: 0px;
+}
+QScrollBar::up-arrow:vertial,QScrollBar::down-arrow:vertial
+{
+    height: 0px;
+}
