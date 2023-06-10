@@ -1,5 +1,8 @@
 # AIChatGUI
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.10%2B-green)](https://www.python.org/)
 
+[中文文档](README_zh.md) | [English Document](README.md)
 ## What's this?
 This is a GUI program that can be used to chat with chatgpt, and also generate speaking audio from text.
 ## How to use?
