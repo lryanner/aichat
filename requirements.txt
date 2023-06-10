@@ -1,0 +1,5 @@
+pyside6
+openai
+pandas
+numpy
+PySideSix-Frameless-Window
