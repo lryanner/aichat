@@ -2,10 +2,11 @@ import datetime
 import winsound
 
 from PySide6.QtCore import QTimer, QUrl
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QAudioDevice, QMediaDevices
 
 import AIChatEnum
 import event_type
+import utils
 from AIChatEnum import AIChat, TranslaterAPIType
 from AIChatUI import *
 from data import ConfigData, ChatBotDataList, ChatBotData, MessageData, UserConfigData, CharacterData, HistoryData
@@ -26,9 +27,9 @@ class AppGUI(FramelessMainWindow):
             self.setStyleSheet(f.read())
         self._clipboard = QApplication.clipboard()
         # create a media player to play the audio
-        self._media_player = QMediaPlayer()
-        self._audio_output = QAudioOutput()
+        self._audio_output = QAudioOutput(QMediaDevices.defaultAudioOutput())
         self._audio_output.setVolume(10)
+        self._media_player = QMediaPlayer()
         self._media_player.setAudioOutput(self._audio_output)
         self._set_up_ui()
         self._chatbot_setting_dialog = ChatBotSettingDialog(config_data.openai_config.get_gpt_params(), self)
@@ -37,8 +38,7 @@ class AppGUI(FramelessMainWindow):
         self._chatbot_setting_dialog.chatbotEdited.connect(self.on_chatbot_update)
         self._global_setting_dialog = GlobalSettingDialog(config_data, self)
         self._global_setting_dialog.installEventFilter(self)
-        self._global_setting_dialog.configSaved.connect(
-            lambda: QApplication.sendEvent(self, SaveDataEvent(AIChatEnum.DataType.Config)))
+        self._global_setting_dialog.configSaved.connect(self.on_config_saved)
         self._current_chatbot: ChatBotData | None = None
         self._chatbot_data_list: ChatBotDataList = chatbots
         self._config = config_data
@@ -138,6 +138,7 @@ class AppGUI(FramelessMainWindow):
             lambda message_data: self.play_audio(f'./download/sounds/{message_data.message_id}.wav'))
         self._message_area.stopPlayAudio.connect(lambda: self._media_player.stop())
         self._message_area.resendMessage.connect(self._resend_message)
+        self._message_area.speakIt.connect(lambda history_id, message_data: QApplication.sendEvent(self, SpeakMessageEvent(history_id, message_data)))
         self._media_player.mediaStatusChanged.connect(self._message_area.on_media_status_changed)
         self._message_area.installEventFilter(self)
         self._right_bar_layout.addWidget(self._message_area)
@@ -191,6 +192,14 @@ class AppGUI(FramelessMainWindow):
             self._global_setting_dialog.first_show()
         else:
             self._global_setting_dialog.show()
+
+    def on_config_saved(self):
+        """
+        the slot for the ConfigSaved signal
+        :return:
+        """
+        self.ConfigSaved.emit(self._config)
+        QApplication.sendEvent(self, SaveDataEvent(AIChatEnum.DataType.Config))
 
     @Slot()
     def _send_message(self):
@@ -249,7 +258,6 @@ class AppGUI(FramelessMainWindow):
         :param message: the message data
         :return:
         """
-        chatbot = self._chatbot_data_list[message.chatbot_id]
         if history_id == self._message_area.current_history_id:
             self._message_area.set_play_status(message, True)
             self._media_player.setSource(QUrl.fromLocalFile(f'./download/sounds/{message.message_id}.wav'))
@@ -269,7 +277,9 @@ class AppGUI(FramelessMainWindow):
                 'name': self._current_chatbot.character.name,
             }
         )
-        self.receive_message(message)
+        chatbot = self._chatbot_data_list[message.chatbot_id]
+        chatbot.append_message(message, self._message_area.current_history_id)
+        self.receive_message(self._message_area.current_history_id,message)
 
     def resizeEvent(self, e: QResizeEvent):
         """
@@ -295,7 +305,7 @@ class AppGUI(FramelessMainWindow):
             QApplication.sendEvent(self, AddChatBotEvent(event.data))
             return True
         elif event.type() == event_type.MainWindowHintEventType:
-            self._hint(event.hint_type, event.hint_message, obj)
+            self._hint(event.hint_type, event.hint_message, self._right_bar, event.interval)
             return True
         elif event.type() == event_type.MainWindowCloseEventType:
             self.close()
@@ -341,7 +351,10 @@ class AppGUI(FramelessMainWindow):
         :param id_: the id of the chatbot
         :return:
         """
+        if self.current_chatbot and self.current_chatbot.chatbot_id == id_:
+            return
         # get the chatbot data
+        self._media_player.stop()
         chatbot = self._chatbot_data_list[id_]
         self.set_current_chatbot(chatbot)
 
@@ -363,8 +376,9 @@ class AppGUI(FramelessMainWindow):
         :return:
         """
         self._chatbot_data_list.remove(id_)
-        self._message_area.clear_messages()
-        self._current_chatbot = None
+        if self._current_chatbot.chatbot_id == id_:
+            self._current_chatbot = None
+            self._message_area.clear_messages()
         QApplication.sendEvent(self, SaveDataEvent(AIChatEnum.DataType.ChatBot))
         QApplication.sendEvent(self, DeleteChatBotEvent(id_))
 
@@ -426,6 +440,7 @@ class MessageArea(QWidget):
     copyMessage = Signal(str)  # message text
     stopPlayAudio = Signal()  # stop playing audio
     playAudio = Signal(MessageData)  # message data
+    speakIt = Signal(str, MessageData)  # message data
 
     def __init__(self):
         super().__init__()
@@ -434,12 +449,13 @@ class MessageArea(QWidget):
         self._layout = QVBoxLayout()
         self._layout.setContentsMargins(15, 15, 15, 15)
         self._layout.setSpacing(15)
-        self._layout.setAlignment(Qt.AlignBottom)
+        self._layout.setAlignment(Qt.AlignTop)
         self.setLayout(self._layout)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._message_container_list: list[QMessageContainer] = []
         self._current_history_id = None
         self._current_play_audio = None
+        self._greeting_message_container = None
 
     def addWidget(self, widget):
         """
@@ -459,6 +475,17 @@ class MessageArea(QWidget):
         """
         # clear the message area
         self.clear_messages()
+        if chatbot_data.character.greeting:
+            # load greeting message
+            self.show_message(chatbot_data.character, MessageData(**{
+                'message': chatbot_data.character.greeting,
+                'is_user': False,
+                'chatbot_id': chatbot_data.chatbot_id,
+                'message_id': 'greeting',
+                'send_time': utils.get_current_time(),
+                'name': chatbot_data.character.name,
+            }), settable=False)
+        # load history_list
         self._current_history_id = history_id
         history = chatbot_data.histories[history_id]
         for message in history:
@@ -467,7 +494,8 @@ class MessageArea(QWidget):
             else:
                 self.show_message(chatbot_data.character, message)
 
-    def show_message(self, sender_data: UserConfigData | CharacterData, message_data: MessageData, resendable=True):
+
+    def show_message(self, sender_data: UserConfigData | CharacterData, message_data: MessageData, resendable=True, settable=True):
         """
         show a message in the message area
         :param resendable: if the message is resendable
@@ -477,18 +505,19 @@ class MessageArea(QWidget):
         """
         max_width = self.parent().parent().parent().parent().parent().parent().width() - 230
         # create a message container
-        message_container = QMessageContainer(sender_data, message_data, max_width)
-        message_container.startPlay.connect(self.start_play)
-        message_container.stopPlay.connect(self._stop_play)
-        message_container.resendClicked.connect(self.resend_message)
-        message_container.copyClicked.connect(lambda: self.copyMessage.emit(message_data.message))
-        message_container.deleteClicked.connect(self.delete_message)
-
+        message_container = QMessageContainer(sender_data, message_data, max_width, settable)
+        if settable:
+            message_container.startPlay.connect(self.start_play)
+            message_container.stopPlay.connect(self._stop_play)
+            message_container.resendClicked.connect(self.resend_message)
+            message_container.copyClicked.connect(lambda: self.copyMessage.emit(message_data.message))
+            message_container.deleteClicked.connect(self.delete_message)
+            self._message_container_list.append(message_container)
+        else:
+            self._greeting_message_container = message_container
         # if not resendable, disable the resend button
         if not resendable:
             message_container.set_resendable(False)
-        # add the message container to the message area
-        self._message_container_list.append(message_container)
         # if the message list is more than 2, set the resend button disabled except the latest 2 history_list
         if len(self._message_container_list) > 2:
             self._message_container_list[-3].set_resendable(False)
@@ -533,8 +562,12 @@ class MessageArea(QWidget):
         clear all history_list
         :return:
         """
+        if self._greeting_message_container:
+            self._greeting_message_container.deleteLater()
+            self._greeting_message_container = None
         for message_container in self._message_container_list:
             message_container.deleteLater()
+        self._current_play_audio = None
         self._message_container_list.clear()
 
     def set_play_status(self, message_data, is_playing):
@@ -543,6 +576,8 @@ class MessageArea(QWidget):
         :param message_data: message data
         :return:
         """
+        if self._current_play_audio and self._current_play_audio != message_data:
+            self.get_message_container(self._current_play_audio).set_play_status(False)
         self._current_play_audio = message_data
         message_container = self.get_message_container(message_data)
         message_container.set_play_status(is_playing)
@@ -553,8 +588,16 @@ class MessageArea(QWidget):
         :param message: message data which contains the audio.
         :return:
         """
-        if self._current_play_audio:
+        has_file = utils.has_file(f'./download/sounds/{message.message_id}.wav')
+        if self._current_play_audio and has_file:
             self.get_message_container(self._current_play_audio).set_play_status(False)
+            self._current_play_audio = message
+        # if there is not the message file, send speakIt event to the main window
+        if not has_file:
+            self.speakIt.emit(self._current_history_id, message)
+            self.get_message_container(message).set_play_status(False)
+            QApplication.sendEvent(self, MainWindowHintEvent(AIChatEnum.HintType.Info, 'The audio file is not downloaded yet. Please wait.'))
+            return
         self._current_play_audio = message
         self.playAudio.emit(message)
 
@@ -599,8 +642,11 @@ class MessageArea(QWidget):
         if not data:
             return
         # if the chatbot is not the current chatbot, do nothing
-        if data.chatbot_id != self.parent().parent().parent().parent().parent().parent().current_chatbot.chatbot_id:
+        if not data.has_history(self._current_history_id):
             return
+        if self._greeting_message_container:
+            self._greeting_message_container.set_avatar(data.character.avatar_path)
+            self._greeting_message_container.set_name(data.character.name)
         for message_container in self._message_container_list:
             if not message_container.is_user:
                 message_container.set_avatar(data.character.avatar_path)
@@ -1086,10 +1132,11 @@ class QMessageContainer(QWidget):
     resendClicked = Signal(MessageData)
     mainWindowResized = Signal(QSize)
 
-    def __init__(self, sender_data: UserConfigData | CharacterData, message_data: MessageData, max_width):
+    def __init__(self, sender_data: UserConfigData | CharacterData, message_data: MessageData, max_width, settable: bool = True):
         super().__init__()
         self._is_hover = False
         self._message_data = message_data
+        self._settable = settable
         self._sender_data = sender_data
         self._is_user = message_data.is_user
         self.setFixedWidth(max_width)
@@ -1109,24 +1156,24 @@ class QMessageContainer(QWidget):
         self._main_layout.setSpacing(0)
         self._main_layout.setAlignment(Qt.AlignRight if self._is_user else Qt.AlignLeft)
         self._main_widget.setLayout(self._main_layout)
-
-        # create an overflow button container
-        self._overflow_button_container = QMessageOverflowButtonsContainer(
-            size=QSize(120, 26),
-            move_point=QPoint(max_width - 200, 0),
-            is_user=self._is_user,
-            parent=self,
-            startPlay=lambda: self.startPlay.emit(
-                self._message_data),
-            stopPlay=lambda: self.stopPlay.emit(
-                self._message_data),
-            copyClicked=lambda: self.copyClicked.emit(
-                self._message_data),
-            deleteClicked=lambda: self.deleteClicked.emit(
-                self._message_data),
-            resendClicked=lambda: self.resendClicked.emit(
-                self._message_data))
-        self._overflow_button_container.hide()
+        if settable:
+            # create an overflow button container
+            self._overflow_button_container = QMessageOverflowButtonsContainer(
+                size=QSize(120, 26),
+                move_point=QPoint(max_width - 200, 0),
+                is_user=self._is_user,
+                parent=self,
+                startPlay=lambda: self.startPlay.emit(
+                    self._message_data),
+                stopPlay=lambda: self.stopPlay.emit(
+                    self._message_data),
+                copyClicked=lambda: self.copyClicked.emit(
+                    self._message_data),
+                deleteClicked=lambda: self.deleteClicked.emit(
+                    self._message_data),
+                resendClicked=lambda: self.resendClicked.emit(
+                    self._message_data))
+            self._overflow_button_container.hide()
 
         # create a images label container
         self._image_label_container = QWidget()
@@ -1170,10 +1217,12 @@ class QMessageContainer(QWidget):
         self.mainWindowResized.connect(lambda size: self.set_max_width(size.width() - 230))
 
     def set_play_status(self, is_playing: bool):
-        self._overflow_button_container.is_playing = is_playing
+        if self._settable:
+            self._overflow_button_container.is_playing = is_playing
 
     def set_max_width(self, width):
-        self._overflow_button_container.move(width - 200, 10)
+        if self._settable:
+            self._overflow_button_container.move(width - 200, 10)
         self._main_widget.setFixedWidth(width)
         self._message_label.set_max_width(width - 108)
         height = self._message_label.sizeHint().height() + 30
@@ -1183,14 +1232,16 @@ class QMessageContainer(QWidget):
     def enterEvent(self, event: QEnterEvent) -> None:
         super().enterEvent(event)
         self._is_hover = True
-        self._overflow_button_container.show()
-        self._overflow_button_container.raise_()
+        if self._settable:
+            self._overflow_button_container.show()
+            self._overflow_button_container.raise_()
         self.update()
 
     def leaveEvent(self, event: QEvent) -> None:
         super().leaveEvent(event)
         self._is_hover = False
-        self._overflow_button_container.hide()
+        if self._settable:
+            self._overflow_button_container.hide()
         self.update()
 
     def eventFilter(self, watched, event):
@@ -1201,7 +1252,8 @@ class QMessageContainer(QWidget):
         return super().eventFilter(watched, event)
 
     def set_resendable(self, resendable):
-        self._overflow_button_container.set_resendable(resendable)
+        if self._settable:
+            self._overflow_button_container.set_resendable(resendable)
 
     @property
     def is_user(self):

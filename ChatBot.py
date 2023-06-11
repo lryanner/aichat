@@ -15,6 +15,7 @@ from exceptions import ChatBotException, ChatGPTException
 import openai
 
 from speaker import Speaker
+from translater import TranslaterFactory, Translater
 
 
 class ChatBotFactory(QObject):
@@ -23,6 +24,7 @@ class ChatBotFactory(QObject):
         self._chatbots = []
         self._chatbot_data = chatbot_data
         self._speaker = Speaker(config.vits_config)
+        self._translater_factory = TranslaterFactory(config.translater_config)
         for chatbot in self._chatbot_data:
             self.create_chatbot(chatbot)
         self._config = config
@@ -31,6 +33,7 @@ class ChatBotFactory(QObject):
     def setup_config(self):
         openai.api_key = self._config.openai_config.openai_api_key
         self._speaker.setup_config()
+        self._translater_factory.setup_config()
 
     def create_chatbot(self, chatbot_data: ChatBotData, limit_token=3400):
         """Creates a chatbot.
@@ -38,7 +41,7 @@ class ChatBotFactory(QObject):
         :param limit_token: int, the limit token, default 3400.
         """
         # generate id
-        chatbot = ChatBot(chatbot_data, self._speaker, limit_token)
+        chatbot = ChatBot(chatbot_data, self._speaker, self._translater_factory, limit_token)
         chatbot.sendMessage.connect(self.send_message)
         chatbot.speak.connect(self.speak_message)
         self._chatbots.append(chatbot)
@@ -72,6 +75,10 @@ class ChatBotFactory(QObject):
 
     def speak_message(self, history_id, message: MessageData):
         QApplication.sendEvent(self, SpeakMessageEvent(history_id, message))
+
+    def speak_it(self, history_id, message: MessageData):
+        receiver = self.get_chatbot(message.chatbot_id)
+        receiver.speak_it(history_id, message)
 
 
 class ChatThread(QThread):
@@ -120,38 +127,59 @@ class ChatThread(QThread):
 
 class SpeakThread(QThread):
     speak = Signal(MessageData)
-    def __init__(self, message_data: MessageData, speaker: Speaker):
+    def __init__(self, message_data: MessageData, speaker: Speaker, text):
         super().__init__()
         self._message_data = message_data
         self._speaker = speaker
+        self._text = text
 
     def run(self) -> None:
-        emotion, nsfw = ChatBot.get_adv_emotion_from_gpt(self._message_data.message)
+        emotion, nsfw = ChatBot.get_emotion_from_gpt(self._message_data.message)
         if not emotion:
             raise ChatGPTException('No emotion detected.')
-        path, emotion_sample = self._speaker.speak(self._message_data.message, id_=3, emotion=emotion, nsfw=nsfw)
+        path, emotion_sample = self._speaker.speak(self._text, id_=0, emotion=emotion, nsfw=nsfw)
         # rename the path to message_id
         utils.rename_file(path, self._message_data.message_id + '.wav')
         self.speak.emit(self._message_data)
 
 
+class TranslateThread(QThread):
+    translate = Signal(MessageData, str)
+    def __init__(self, message_data: MessageData, translater: Translater):
+        super().__init__()
+        self._message_data = message_data
+        self._translater = translater
+
+    def run(self) -> None:
+        # remove the content in ()
+        text = utils.remove_brackets_content(self._message_data.message)
+        result = self._translater.translate(text)
+        self.translate.emit(self._message_data, result)
+
 class ChatBot(QObject):
-    """The chatbot"""
+    """The chatbot."""
     sendMessage = Signal(str, MessageData) # history id, message data
     speak = Signal(str, MessageData) # history id, message data
 
-    def __init__(self, chatbot_data: ChatBotData, speaker, limit_token=3400):
-        """Sets the chatbot
-        :param chatbot_data: ChatBotData, the chatbot data
-        :param limit_token: int, the limit token, default 3400"""
+    def __init__(self, chatbot_data: ChatBotData, speaker, translater_factory, limit_token=3400):
+        """
+        Sets the chatbot.
+
+        :param chatbot_data: ChatBotData, the chatbot data.
+        :param speaker: Speaker, the speaker.
+        :param translater_factory: TranslaterFactory, the translater factory.
+        :param limit_token: int, the limit token, default 3400.
+        """
         super().__init__()
         self._chatbot_data: ChatBotData = chatbot_data
         self._speaker = speaker
+        self._translater_factory = translater_factory
         self._chat_thread = None
         self._speak_thread = None
+        self._translate_thread = None
 
     @property
-    def chatbot_id(self):
+    def chatbot_id(self) -> str:
         return self._chatbot_data.chatbot_id
 
     # use openai module to chat
@@ -160,15 +188,32 @@ class ChatBot(QObject):
         # use a thread to chat
         self._chat_thread = ChatThread(history_id, self._chatbot_data)
         self._chat_thread.sendMessage.connect(self.speak_it)
+        self._chat_thread.sendMessage.connect(self.sendMessage)
         self._chat_thread.start()
 
     @Slot(str, MessageData)
     def speak_it(self, history_id, message_data: MessageData):
         """Speaks the message"""
-        self.sendMessage.emit(history_id, message_data)
-        self._speak_thread = SpeakThread(message_data, self._speaker)
-        self._speak_thread.speak.connect(lambda : self.speak.emit(history_id, message_data))
-        self._speak_thread.start()
+        def speak_it_after_translate(_message_data: MessageData, result: str):
+            """
+            Speaks the message after translating.
+            :param _message_data: message data.
+            :param result: the result of translation.
+            :return:
+            """
+            self._speak_thread = SpeakThread(_message_data, self._speaker, result)
+            self._speak_thread.speak.connect(lambda : self.speak.emit(history_id, _message_data))
+            self._speak_thread.start()
+        import langid
+        lang = langid.classify(message_data.message)[0]
+        if lang == 'ja':
+            speak_it_after_translate(message_data, utils.remove_brackets_content(message_data.message))
+        else:
+            # translate the message
+            self._translate_thread = TranslateThread(message_data, self._translater_factory.active_translater)
+            self._translate_thread.translate.connect(speak_it_after_translate)
+            self._translate_thread.start()
+
 
     def summarize(self):
         """Summarizes the chat history"""
@@ -204,7 +249,7 @@ class ChatBot(QObject):
                 nsfw: boolean, if nsfw
         """
         messages = [{'role': 'system',
-                     'content': '这是一段对话的数据，请你对最后一次对话内容进行如下分析：根据对话上下文，判断这次说话时的语气，用5个简体中文词描述。这5个词请务必用\'/\'隔开。请用json格式给我结果，格式为{\"state\":这次说话的语气, \"not_safe_for_work\": ture of false}。除了json格式的内容外，不要添加任何内容！"'},
+                     'content': '判断说话人说这句话时的语气，用5个简体中文词描述。这5个词请务必用\'/\'隔开。请用json格式给我结果，格式为{\"state\":这次说话的语气, \"not_safe_for_work\": ture of false}。除了json格式的内容外，不要添加任何内容！"'},
                     {'role': 'user', 'content': text}]
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
@@ -213,10 +258,11 @@ class ChatBot(QObject):
         )
         try:
             content = utils.load_json_string(response['choices'][0]['message']['content'])
+            utils.warn('Get emotion from gpt: ' + str(content))
             return content['state'].split('/'), content['not_safe_for_work']
         except Exception as e:
             utils.warn('Get emotion from gpt failed: ' + str(e) + 'retrying...')
-            return ChatBot.get_emotion_from_gpt(text)
+            return None
 
     @staticmethod
     def get_adv_emotion_from_gpt(text, temperature=0):

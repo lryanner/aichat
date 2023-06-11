@@ -1,7 +1,7 @@
 import datetime
 import os
 from functools import total_ordering
-from typing import Iterable
+from typing import Iterable, Iterator
 
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
@@ -80,7 +80,8 @@ class DataLoader(QObject):
                     },
                     {
                         'api_type': TranslaterAPIType.Youdao.value,
-                        'api_key': '',
+                        'app_id': '',
+                        'app_key': '',
                         'active': 0
                     },
                     {
@@ -275,12 +276,12 @@ class TranslaterConfigData(Data):
         self._api_type = kwargs['api_type']
         self._active = kwargs['active']
         match self._api_type:
-            case TranslaterAPIType.Baidu | TranslaterAPIType.Baidu.value:
+            case TranslaterAPIType.Baidu | TranslaterAPIType.Baidu.value| TranslaterAPIType.Youdao| TranslaterAPIType.Youdao.value:
                 self._app_id = kwargs['app_id']
                 self._app_key = kwargs['app_key']
                 self._api_key = None
                 super().__init__('TL' + hex(hash(self._app_id + self._app_key)).split('x')[1].upper())
-            case TranslaterAPIType.Google | TranslaterAPIType.DeepL | TranslaterAPIType.Youdao | TranslaterAPIType.Google.value | TranslaterAPIType.DeepL.value | TranslaterAPIType.Youdao.value:
+            case TranslaterAPIType.Google | TranslaterAPIType.DeepL  | TranslaterAPIType.Google.value | TranslaterAPIType.DeepL.value :
                 self._api_key = kwargs['api_key']
                 self._app_id = None
                 self._app_key = None
@@ -288,10 +289,10 @@ class TranslaterConfigData(Data):
 
     def _get_data(self):
         match self._api_type:
-            case TranslaterAPIType.Baidu | TranslaterAPIType.Baidu.value:
+            case TranslaterAPIType.Baidu | TranslaterAPIType.Baidu.value| TranslaterAPIType.Youdao| TranslaterAPIType.Youdao.value:
                 return {'api_type': self._api_type, 'app_id': self._app_id, 'app_key': self._app_key,
                         'active': self._active}
-            case TranslaterAPIType.Google | TranslaterAPIType.DeepL | TranslaterAPIType.Youdao | TranslaterAPIType.Google.value | TranslaterAPIType.DeepL.value | TranslaterAPIType.Youdao.value:
+            case TranslaterAPIType.Google | TranslaterAPIType.DeepL  | TranslaterAPIType.Google.value | TranslaterAPIType.DeepL.value:
                 return {'api_type': self._api_type, 'api_key': self._api_key, 'active': self._active}
 
     def update(self, data):
@@ -299,11 +300,11 @@ class TranslaterConfigData(Data):
             self._api_type = data.api_type
             self._active = data.active
             match self._api_type:
-                case TranslaterAPIType.Baidu | TranslaterAPIType.Baidu.value:
+                case TranslaterAPIType.Baidu | TranslaterAPIType.Baidu.value| TranslaterAPIType.Youdao| TranslaterAPIType.Youdao.value:
                     self._app_id = data.app_id
                     self._app_key = data.app_key
                     self._api_key = None
-                case TranslaterAPIType.Google | TranslaterAPIType.DeepL | TranslaterAPIType.Youdao | TranslaterAPIType.Google.value | TranslaterAPIType.DeepL.value | TranslaterAPIType.Youdao.value:
+                case TranslaterAPIType.Google | TranslaterAPIType.DeepL  | TranslaterAPIType.Google.value | TranslaterAPIType.DeepL.value:
                     self._api_key = data.api_key
                     self._app_id = None
                     self._app_key = None
@@ -318,7 +319,7 @@ class TranslaterConfigData(Data):
 
 class TranslaterConfigDataList(Data, Iterable):
     """
-    Data class for TranslaterAPI config list
+    Data class for TranslaterAPI config list.
     :param translater_config_list: list of TranslaterConfigData
     """
 
@@ -328,7 +329,7 @@ class TranslaterConfigDataList(Data, Iterable):
         for translater_config in translater_config_list:
             self._translater_config_list.append(TranslaterConfigData(**translater_config))
 
-    def __iter__(self):
+    def __iter__(self)->Iterator[TranslaterConfigData]:
         return iter(self._translater_config_list)
 
     def __len__(self):
@@ -667,6 +668,14 @@ class ChatBotData(Data):
         :return:
         """
         self._histories[history_id].remove(message)
+
+    def has_history(self, history_id):
+        """
+        Check if the chatbot has history.
+        :param history_id: the id of history to check.
+        :return: bool
+        """
+        return history_id in self._histories
 
     chatbot_id = property(lambda self: self._id)
     gpt_params = property(lambda self: self._gpt_params)
@@ -1030,6 +1039,17 @@ class HistoryDataList(Data):
 
     def __len__(self):
         return len(self._history_list)
+
+    def __contains__(self, item):
+        if isinstance(item, HistoryData):
+            return item in self._history_list
+        elif isinstance(item, str):
+            for history in self._history_list:
+                if history.id_ == item:
+                    return True
+            return False
+        else:
+            return False
 
     def append(self, history):
         self._history_list.append(HistoryData(history))

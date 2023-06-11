@@ -2,4 +2,5 @@ pyside6
 openai
 pandas
 numpy
+requests
 PySideSix-Frameless-Window

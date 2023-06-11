@@ -1,6 +1,9 @@
+import hashlib
 import json
 import logging
 import random
+from datetime import datetime
+
 import winsound
 
 import pandas
@@ -28,6 +31,13 @@ def has_same_item(list1, list2):
         if item in list2:
             return True
     return False
+
+def get_same_item(list1, list2):
+    result = []
+    for item in list1:
+        if item in list2:
+            result.append(item)
+    return result
 
 def shuffle_list(list_):
     random.shuffle(list_)
@@ -84,3 +94,32 @@ def rename_file(origin_file_name_with_path, file_name):
     file_path = os.path.dirname(origin_file_name_with_path)
     target_file_name_with_path = os.path.join(file_path, file_name)
     os.rename(origin_file_name_with_path, target_file_name_with_path)
+
+def has_file(file_path):
+    import os
+    return os.path.exists(file_path)
+
+def get_random_salt():
+    return str(random.randint(32768, 65536))
+
+def get_md5_sign(text):
+    return hashlib.md5(text).hexdigest()
+
+def get_sha256_sign(text):
+    return hashlib.sha256(text).hexdigest()
+
+def get_time_stamp():
+    return str(int(datetime.now().timestamp()))
+
+def remove_brackets_content(text):
+    """
+    Remove the content in brackets. Both Chinese and English brackets are supported.
+    :param text: the text to be processed.
+    :return:
+    """
+    import re
+    text = re.sub(r'（.*?）', '', text)
+    return re.sub(r'\(.*?\)', '', text)
+
+def get_current_time():
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')

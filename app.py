@@ -36,7 +36,10 @@ class App(QObject):
             if isinstance(obj, ChatBotFactory):
                 self.gui.receive_message(event.history_id, event.message)
         elif event.type() == SpeakMessageEventType:
-            self.gui.speak_message(event.history_id, event.message)
+            if isinstance(obj, AppGUI):
+                self.chatbot_factory.speak_it(event.history_id, event.message)
+            if isinstance(obj, ChatBotFactory):
+                self.gui.speak_message(event.history_id, event.message)
         elif event.type() == AddChatBotEventType:
             self.chatbot_factory.create_chatbot(event.data)
         elif event.type() == DeleteChatBotEventType:

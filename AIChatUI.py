@@ -43,7 +43,7 @@ class QInWindowDialog(QWidget):
         # create a placeholder for the main content
         self._main_content = QWidget()
         self._main_content.setObjectName('main_content')
-        self._main_content.setFixedSize(400, 500)
+        self._main_content.setFixedSize(500, 700)
         self._main_content.setContentsMargins(0, 0, 0, 0)
         self._main_content_layout = QVBoxLayout()
         self._main_content_layout.setContentsMargins(0, 0, 0, 0)
@@ -1293,7 +1293,13 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
         self._layout.addWidget(self._baidu_api_widget)
         # add a widget for the google api, youdao api, deepl api
         self._google_api_widget = QTranslaterAPIKeyContainer()
-        self._youdao_api_widget = QTranslaterAPIKeyContainer()
+        self._youdao_api_widget = QWidget()
+        self._youdao_api_widget_layout = QSettableHLayout(content_margin=(0, 0, 0, 0), spacing=0, alignment=None)
+        self._youdao_api_widget.setLayout(self._youdao_api_widget_layout)
+        self._youdao_api_app_id_lineedit = QLabelInput('App ID:', label_width=60)
+        self._youdao_api_widget_layout.addWidget(self._youdao_api_app_id_lineedit)
+        self._youdao_api_app_key_lineedit = QLabelInput('App Key:', label_width=70, password_mode=True)
+        self._youdao_api_widget_layout.addWidget(self._youdao_api_app_key_lineedit)
         self._deepl_api_widget = QTranslaterAPIKeyContainer()
         self._layout.addWidget(self._google_api_widget)
         self._layout.addWidget(self._youdao_api_widget)
@@ -1319,7 +1325,7 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
             self._google_api_widget.hide()
             self._youdao_api_widget.show()
             self._deepl_api_widget.hide()
-        elif api_type == 'Deepl':
+        elif api_type == 'DeepL':
             self._baidu_api_widget.hide()
             self._google_api_widget.hide()
             self._youdao_api_widget.hide()
@@ -1336,7 +1342,8 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
                 case TranslaterAPIType.Google.value:
                     self._google_api_widget.api_key = config.api_key
                 case TranslaterAPIType.Youdao.value:
-                    self._youdao_api_widget.api_key = config.api_key
+                    self._youdao_api_app_id_lineedit.input_content = config.app_id
+                    self._youdao_api_app_key_lineedit.input_content = config.app_key
                 case TranslaterAPIType.DeepL.value:
                     self._deepl_api_widget.api_key = config.api_key
 
@@ -1355,8 +1362,9 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
             },
             {
                 'api_type': TranslaterAPIType.Youdao.value,
-                'api_key': self._youdao_api_widget.api_key,
-                'active': 1 if self._api_type_label_combobox.currentText() == 'Youdao' and self._youdao_api_widget.api_key else 0
+                'app_id': self._youdao_api_app_id_lineedit.input_content,
+                'app_key': self._youdao_api_app_key_lineedit.input_content,
+                'active': 1 if self._api_type_label_combobox.currentText() == 'Youdao' and self._youdao_api_app_id_lineedit.input_content and self._youdao_api_app_key_lineedit else 0
             },
             {
                 'api_type': TranslaterAPIType.DeepL.value,
