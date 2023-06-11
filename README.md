@@ -26,7 +26,7 @@ To generate audio, you need to install [nene-emotion](https://huggingface.co/spa
 
 To chat with chatgpt, you need to get a chatgpt api key from [here](https://api.chatgpt.com/). Then, you need to change the `OpenAI Setting` to your api key.
 
-To translate text, you need to get a API access, only support[Baidu](https://api.fanyi.baidu.com/)、[Google](https://cloud.google.com/translate/docs/reference/rest/)、[Youdao](https://ai.youdao.com/product-fanyi-text.s)和[DeepL](https://www.deepl.com/pro-api). Then, you need to change the `Translater Setting` to your api key.
+To translate text, you need to get a API access, only support [Baidu](https://api.fanyi.baidu.com/)、[Google](https://cloud.google.com/translate/docs/reference/rest/)、[Youdao](https://ai.youdao.com/product-fanyi-text.s) and [DeepL](https://www.deepl.com/pro-api). Then, you need to change the `Translater Setting` to your api key.
 ## Features
 - Chat with chatgpt
 - Generate emotion audio from text
