@@ -34,6 +34,7 @@ class TranslaterAPIType(BaseEnum):
     Baidu = 1
     DeepL = 2
     Youdao = 3
+    OpenAI = 4
 
 
 class HintType(BaseEnum):

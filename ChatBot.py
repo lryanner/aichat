@@ -251,11 +251,15 @@ class ChatBot(QObject):
         messages = [{'role': 'system',
                      'content': '判断说话人说这句话时的语气，用5个简体中文词描述。这5个词请务必用\'/\'隔开。请用json格式给我结果，格式为{\"state\":这次说话的语气, \"not_safe_for_work\": ture of false}。除了json格式的内容外，不要添加任何内容！"'},
                     {'role': 'user', 'content': text}]
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            temperature=temperature
-        )
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                temperature=temperature
+            )
+        except openai.error.RateLimitError as e:
+            utils.warn('Because of rate limit, get emotion from gpt failed: ' + str(e) + 'retrying...')
+            return ChatBot.get_emotion_from_gpt(text, temperature)
         try:
             content = utils.load_json_string(response['choices'][0]['message']['content'])
             utils.warn('Get emotion from gpt: ' + str(content))

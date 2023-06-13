@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication
 import sys
 
 from data import DataLoader
+from event_center import EventCenter
 from event_type import *
 
 
@@ -13,6 +14,8 @@ class App(QObject):
     def __init__(self):
         super().__init__()
         self.app = QApplication([])
+        self.event_center = EventCenter()
+        self.event_center.installEventFilter(self)
         self.data_loader = DataLoader()
         # install event filter
         self.data_loader.installEventFilter(self)
@@ -26,10 +29,8 @@ class App(QObject):
     def eventFilter(self, obj, event):
         if event.type() == DataLoadedEventType:
             self.init_gui(event)
-            return True
         elif event.type() == SaveDataEventType:
             self.data_loader.save_data(event.data_type)
-            return True
         elif event.type() == SendMessageEventType:
             if isinstance(obj, AppGUI):
                 self.chatbot_factory.receive_message(event.history_id, event.message)
@@ -44,6 +45,9 @@ class App(QObject):
             self.chatbot_factory.create_chatbot(event.data)
         elif event.type() == DeleteChatBotEventType:
             self.chatbot_factory.delete_chatbot(event.chatbot_id)
+        elif event.type() == MainWindowHintEventType:
+            if obj is self.event_center:
+                self.gui.hint(event.hint_type, event.hint_message, interval=event.interval)
         return super().eventFilter(obj, event)
 
     def init_gui(self, event: QEvent):

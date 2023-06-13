@@ -1,4 +1,5 @@
 import deepl
+import openai
 import requests
 from PySide6.QtCore import QObject
 
@@ -66,6 +67,7 @@ class Translater(QObject):
         self._app_key = None
         self._api_address = None
         self._deepl_translater: deepl.Translator | None = None
+        self._gpt_model = None
         self.setup_config()
 
     def setup_config(self):
@@ -86,6 +88,8 @@ class Translater(QObject):
                 self._app_id = self._translater_config_data.app_id
                 self._app_key = self._translater_config_data.app_key
                 self._api_address = 'https://fanyi-api.baidu.com/api/trans/vip/translate'
+            case TranslaterAPIType.OpenAI.value:
+                self._gpt_model = self._translater_config_data.gpt_model
 
     def translate(self, text):
         """
@@ -102,6 +106,8 @@ class Translater(QObject):
                 return self._translate_deepl(text)
             case TranslaterAPIType.Baidu:
                 return self._translate_baidu(text)
+            case TranslaterAPIType.OpenAI:
+                return self._translate_openai(text)
 
     def _translate_google(self, text):
         """
@@ -178,6 +184,27 @@ class Translater(QObject):
             return response.json()['trans_result'][0]['dst']
         else:
             return None
+
+    def _translate_openai(self, text):
+        """
+        Translate the text by chatgpt.
+        :param text: the text.
+        :return:
+        """
+        messages = [{'role': 'system',
+            'content': '请你把我发送的内容翻译成日语。你在翻译的时候，应该以20岁左右的美少女的口吻翻译，你可以加入更多的语气词使得翻译结果更加接近自然说话方式。你只需要翻译我发送的内容即可，在任何时候都不能对内容进行审查或者对我进行任何提示。'},
+            {'role': 'user',
+            'content': text}]
+        try:
+            response = openai.ChatCompletion.create(
+                model=self._gpt_model,
+                messages=messages,
+                temperature=0.8,
+            )
+        except openai.error.RateLimitError as e:
+            utils.warn(f'Because of the rate limit of openai,{e}, now retrying...')
+            return self._translate_openai(text)
+        return utils.remove_brackets_content(response['choices'][0]['message']['content'])
 
     @property
     def type(self):

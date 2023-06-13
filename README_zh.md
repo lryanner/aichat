@@ -28,7 +28,7 @@
 
 要和chatgpt聊天，你需要从[这里](https://api.chatgpt.com/)获取一个chatgpt api key。然后，你需要把`OpenAI Setting`改成你的api key。
 
-此外，你还需要一个翻译API。目前支持[百度](https://api.fanyi.baidu.com/)、[谷歌](https://cloud.google.com/translate/docs/reference/rest/)、[有道](https://ai.youdao.com/product-fanyi-text.s)和[DeepL](https://www.deepl.com/pro-api)。你需要把`Translater Setting`改成你的翻译API。
+此外，你还需要一个翻译API。目前支持[百度](https://api.fanyi.baidu.com/)、[谷歌](https://cloud.google.com/translate/docs/reference/rest/)、[有道](https://ai.youdao.com/product-fanyi-text.s)、[DeepL](https://www.deepl.com/pro-api)、[ChatGPT](https://api.chatgpt.com/)。你需要把`Translater Setting`改成你的翻译API。
 ## 特性
 - 和chatgpt聊天
 - 生成带情感的语音

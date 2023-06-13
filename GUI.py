@@ -15,10 +15,20 @@ from data import ConfigData, ChatBotDataList, ChatBotData, MessageData, UserConf
 # main window class
 class AppGUI(FramelessMainWindow):
     """Main window class"""
+    _instance = None
     Resized = Signal(QSize)  # signal emitted when the window is resized
     ConfigSaved = Signal(ConfigData)  # signal emitted when the config is saved
     ChatBotUpdated = Signal(ChatBotData)  # signal emitted when the chatbot config is updated
     InitFinished = Signal()  # signal emitted when the initialization is finished
+    def __new__(cls, *args, **kwargs):
+        """
+        The singleton.
+        :param args:
+        :param kwargs:
+        """
+        if cls._instance is None:
+            cls._instance = super(AppGUI, cls).__new__(cls)
+        return cls._instance
 
     def __init__(self, config_data: ConfigData, chatbots: ChatBotDataList):
         super().__init__()
@@ -132,7 +142,7 @@ class AppGUI(FramelessMainWindow):
         # create a message area for the right bar
         self._message_area = MessageArea()
         self._message_area.copyMessage.connect(
-            lambda: self._hint(AIChatEnum.HintType.Info, 'Message copied.', self._right_bar, 2000))
+            lambda: self.hint(AIChatEnum.HintType.Info, 'Message copied.', self._right_bar, 2000))
         self._message_area.copyMessage.connect(lambda text: self._clipboard.setText(text))
         self._message_area.playAudio.connect(
             lambda message_data: self.play_audio(f'./download/sounds/{message_data.message_id}.wav'))
@@ -208,10 +218,10 @@ class AppGUI(FramelessMainWindow):
         :return:
         """
         if not self._current_chatbot:
-            self._hint(AIChatEnum.HintType.Warning, 'Please select a chatbot first.', self._right_bar, 2000)
+            self.hint(AIChatEnum.HintType.Warning, 'Please select a chatbot first.', self._right_bar, 2000)
             return
         if self._input_box.toPlainText().rstrip('\n') == '':
-            self._hint(AIChatEnum.HintType.Warning, 'Please input something', self._right_bar, 2000)
+            self.hint(AIChatEnum.HintType.Warning, 'Please input something', self._right_bar, 2000)
             return
         message = MessageData(
             **{
@@ -305,7 +315,7 @@ class AppGUI(FramelessMainWindow):
             QApplication.sendEvent(self, AddChatBotEvent(event.data))
             return True
         elif event.type() == event_type.MainWindowHintEventType:
-            self._hint(event.hint_type, event.hint_message, self._right_bar, event.interval)
+            self.hint(event.hint_type, event.hint_message, self._right_bar, event.interval)
             return True
         elif event.type() == event_type.MainWindowCloseEventType:
             self.close()
@@ -415,7 +425,7 @@ class AppGUI(FramelessMainWindow):
         self._media_player.play()
 
     @staticmethod
-    def _hint(hint_type, text, obj, interval=3000):
+    def hint(hint_type, text, obj=None, interval=3000):
         """
         show a hint box
         :param hint_type: the type of the hint box, see HintBoxType
@@ -424,12 +434,18 @@ class AppGUI(FramelessMainWindow):
         :param interval: after how many milliseconds the hint box will disappear
         :return:
         """
+        if not obj:
+            obj = AppGUI._instance.default_hint_area
         hint_box = HintBox(hint_type, text, obj, interval)
         hint_box.show()
 
     @property
     def current_chatbot(self):
         return self._current_chatbot
+
+    @property
+    def default_hint_area(self):
+        return self._right_bar
 
 
 class MessageArea(QWidget):

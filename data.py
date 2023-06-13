@@ -7,7 +7,6 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
 
 import AIChatEnum
-import data
 import event
 import utils
 from AIChatEnum import TranslaterAPIType
@@ -88,7 +87,12 @@ class DataLoader(QObject):
                         'api_type': TranslaterAPIType.DeepL.value,
                         'api_key': '',
                         'active': 0
-                    }
+                    },
+                    {
+                        'api_type': TranslaterAPIType.OpenAI.value,
+                        'gpt_model': 'gpt-3.5-turbo',
+                        'active': 0
+                    },
                 ],
                 'vits_config': [
                     {
@@ -280,12 +284,20 @@ class TranslaterConfigData(Data):
                 self._app_id = kwargs['app_id']
                 self._app_key = kwargs['app_key']
                 self._api_key = None
+                self._gpt_model = None
                 super().__init__('TL' + hex(hash(self._app_id + self._app_key)).split('x')[1].upper())
             case TranslaterAPIType.Google | TranslaterAPIType.DeepL  | TranslaterAPIType.Google.value | TranslaterAPIType.DeepL.value :
                 self._api_key = kwargs['api_key']
                 self._app_id = None
                 self._app_key = None
+                self._gpt_model = None
                 super().__init__('TL' + hex(hash(self._api_key)).split('x')[1].upper())
+            case TranslaterAPIType.OpenAI | TranslaterAPIType.OpenAI.value:
+                self._api_key = None
+                self._app_id = None
+                self._app_key = None
+                self._gpt_model = kwargs['gpt_model']
+                super().__init__('TL' + hex(hash(self._gpt_model)).split('x')[1].upper())
 
     def _get_data(self):
         match self._api_type:
@@ -294,6 +306,8 @@ class TranslaterConfigData(Data):
                         'active': self._active}
             case TranslaterAPIType.Google | TranslaterAPIType.DeepL  | TranslaterAPIType.Google.value | TranslaterAPIType.DeepL.value:
                 return {'api_type': self._api_type, 'api_key': self._api_key, 'active': self._active}
+            case TranslaterAPIType.OpenAI | TranslaterAPIType.OpenAI.value:
+                return {'api_type': self._api_type, 'gpt_model': self._gpt_model,'active': self._active}
 
     def update(self, data):
         if isinstance(data, TranslaterConfigData):
@@ -304,10 +318,17 @@ class TranslaterConfigData(Data):
                     self._app_id = data.app_id
                     self._app_key = data.app_key
                     self._api_key = None
+                    self._gpt_model = None
                 case TranslaterAPIType.Google | TranslaterAPIType.DeepL  | TranslaterAPIType.Google.value | TranslaterAPIType.DeepL.value:
                     self._api_key = data.api_key
                     self._app_id = None
                     self._app_key = None
+                    self._gpt_model = None
+                case TranslaterAPIType.OpenAI | TranslaterAPIType.OpenAI.value:
+                    self._api_key = None
+                    self._app_id = None
+                    self._app_key = None
+                    self._gpt_model = data.gpt_model
 
     api_type = property(lambda self: self._api_type)
     app_id = property(lambda self: self._app_id)
@@ -315,6 +336,7 @@ class TranslaterConfigData(Data):
     api_key = property(lambda self: self._api_key)
     active = property(lambda self: self._active)
     data = property(lambda self: self._get_data())
+    gpt_model = property(lambda self: self._gpt_model)
 
 
 class TranslaterConfigDataList(Data, Iterable):

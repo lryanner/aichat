@@ -1291,8 +1291,11 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
         self._baidu_api_app_key_lineedit = QLabelInput('App Key:', label_width=70, password_mode=True)
         self._baidu_api_widget_layout.addWidget(self._baidu_api_app_key_lineedit)
         self._layout.addWidget(self._baidu_api_widget)
-        # add a widget for the google api, youdao api, deepl api
+        # add a widget for the deepl api
+        self._deepl_api_widget = QTranslaterAPIKeyContainer()
+        # add a widget for the Google api
         self._google_api_widget = QTranslaterAPIKeyContainer()
+        # add a widget for the youdao api
         self._youdao_api_widget = QWidget()
         self._youdao_api_widget_layout = QSettableHLayout(content_margin=(0, 0, 0, 0), spacing=0, alignment=None)
         self._youdao_api_widget.setLayout(self._youdao_api_widget_layout)
@@ -1300,10 +1303,18 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
         self._youdao_api_widget_layout.addWidget(self._youdao_api_app_id_lineedit)
         self._youdao_api_app_key_lineedit = QLabelInput('App Key:', label_width=70, password_mode=True)
         self._youdao_api_widget_layout.addWidget(self._youdao_api_app_key_lineedit)
-        self._deepl_api_widget = QTranslaterAPIKeyContainer()
+        # add a widget for the openai api
+        self._openai_api_widget = QWidget()
+        self._openai_api_widget_layout = QSettableHLayout(content_margin=(0, 0, 0, 0), spacing=0, alignment=None)
+        self._openai_api_widget.setLayout(self._openai_api_widget_layout)
+        self._openai_api_app_key_lineedit = QLabelComboBox('Model:', ['gpt-3.5-turbo','gpt-4'], label_width=70)
+        self._openai_api_widget_layout.addWidget(self._openai_api_app_key_lineedit)
+
+
         self._layout.addWidget(self._google_api_widget)
         self._layout.addWidget(self._youdao_api_widget)
         self._layout.addWidget(self._deepl_api_widget)
+        self._layout.addWidget(self._openai_api_widget)
         # when the api type is changed, change the api widget
         self._api_type_label_combobox.currentTextChanged.connect(self._change_api_widget)
         self._load_data(data)
@@ -1315,21 +1326,31 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
             self._google_api_widget.hide()
             self._youdao_api_widget.hide()
             self._deepl_api_widget.hide()
+            self._openai_api_widget.hide()
         elif api_type == 'Google':
             self._baidu_api_widget.hide()
             self._google_api_widget.show()
             self._youdao_api_widget.hide()
             self._deepl_api_widget.hide()
+            self._openai_api_widget.hide()
         elif api_type == 'Youdao':
             self._baidu_api_widget.hide()
             self._google_api_widget.hide()
             self._youdao_api_widget.show()
             self._deepl_api_widget.hide()
+            self._openai_api_widget.hide()
         elif api_type == 'DeepL':
             self._baidu_api_widget.hide()
             self._google_api_widget.hide()
             self._youdao_api_widget.hide()
             self._deepl_api_widget.show()
+            self._openai_api_widget.hide()
+        elif api_type == 'OpenAI':
+            self._baidu_api_widget.hide()
+            self._google_api_widget.hide()
+            self._youdao_api_widget.hide()
+            self._deepl_api_widget.hide()
+            self._openai_api_widget.show()
 
     def _load_data(self, data: TranslaterConfigDataList):
         self._api_type_label_combobox.setCurrentText(
@@ -1346,6 +1367,8 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
                     self._youdao_api_app_key_lineedit.input_content = config.app_key
                 case TranslaterAPIType.DeepL.value:
                     self._deepl_api_widget.api_key = config.api_key
+                case TranslaterAPIType.OpenAI.value:
+                    self._openai_api_app_key_lineedit.currentText = config.gpt_model
 
     def _data(self) -> TranslaterConfigDataList:
         data = TranslaterConfigDataList([
@@ -1370,6 +1393,11 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
                 'api_type': TranslaterAPIType.DeepL.value,
                 'api_key': self._deepl_api_widget.api_key,
                 'active': 1 if self._api_type_label_combobox.currentText() == 'DeepL' and self._deepl_api_widget.api_key else 0
+            },
+            {
+                'api_type': TranslaterAPIType.OpenAI.value,
+                'gpt_model': self._openai_api_app_key_lineedit.currentText,
+                'active': 1 if self._api_type_label_combobox.currentText() == 'OpenAI' and self._openai_api_app_key_lineedit.currentText else 0
             }
         ])
         return data
