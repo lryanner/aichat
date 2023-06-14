@@ -1,6 +1,8 @@
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
 
+from GUI import AppGUI
+
 
 class EventCenter(QObject):
     """
@@ -29,4 +31,4 @@ class EventCenter(QObject):
         """
         if not EventCenter._instance:
             EventCenter._instance = EventCenter()
-        QApplication.sendEvent(EventCenter._instance, event)
+        QApplication.postEvent(AppGUI.get_instance(), event)

@@ -1,7 +1,10 @@
 import datetime
+import threading
+from threading import Thread
+
 import winsound
 
-from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtCore import QTimer, QUrl, QCoreApplication
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QAudioDevice, QMediaDevices
 
 import AIChatEnum
@@ -32,6 +35,7 @@ class AppGUI(FramelessMainWindow):
 
     def __init__(self, config_data: ConfigData, chatbots: ChatBotDataList):
         super().__init__()
+        AppGUI._instance = self
         # apply qss style sheet
         with open('app.qss', 'r') as f:
             self.setStyleSheet(f.read())
@@ -82,7 +86,7 @@ class AppGUI(FramelessMainWindow):
 
         self.setWindowTitle('ChatBot')
         self.setMinimumSize(800, 600)
-        self.resize(1200, 860)
+        self.resize(950, 860)
         # set the window in the center of the screen
         self.move((self.screen().size().width() - self.size().width()) / 2,
                   (self.screen().size().height() - self.size().height()) / 2)
@@ -325,6 +329,12 @@ class AppGUI(FramelessMainWindow):
             QApplication.sendEvent(self, SaveDataEvent(AIChatEnum.DataType.ChatBot))
         return super().eventFilter(obj, event)
 
+    def event(self, e):
+        if isinstance(e, MainWindowHintEvent):
+            self.hint(e.hint_type, e.hint_message, self._right_bar, e.interval)
+            return True
+        return super().event(e)
+
     def _add_chatbot_button(self, data: ChatBotData):
         """
         add a new chatbot button to the left bar
@@ -446,6 +456,12 @@ class AppGUI(FramelessMainWindow):
     @property
     def default_hint_area(self):
         return self._right_bar
+
+    @staticmethod
+    def get_instance():
+        if not AppGUI._instance:
+            AppGUI._instance = AppGUI()
+        return AppGUI._instance
 
 
 class MessageArea(QWidget):
@@ -1308,18 +1324,17 @@ class HintBox(QWidget):
         self._timer.start(interval)
 
     def _init_ui(self):
-        # set a fixed height
-        self.setFixedHeight(40)
         self.setGraphicsEffect(QGraphicsDropShadowEffect(blurRadius=10, xOffset=0, yOffset=0))
-        # set width according to the hint text
-        self.setFixedWidth(len(self._hint_text) * 10)
-        # move the widget to the top center of the parent widget
-        self.move(int((self.parent().width() - self.width()) / 2), 25)
         # add a main layout
         self._main_layout = QSettableHLayout(content_margin=(0, 0, 0, 0), spacing=0, alignment=Qt.AlignCenter)
         self.setLayout(self._main_layout)
         # add a hint text label
         self._hint_text_label = QLabel(self._hint_text)
+        self._hint_text_label.setFont(QFont('HarmonyOS Sans SC', 14))
+        metrics = self._hint_text_label.fontMetrics()
+        self.setFixedSize(metrics.horizontalAdvance(self._hint_text) + 50, 40)
+        # move the widget to the top center of the parent widget
+        self.move(int((self.parent().width() - self.width()) / 2), 25)
         self._hint_text_label.setObjectName('hint_text_label')
         self._main_layout.addWidget(self._hint_text_label)
         match self._hint_type:

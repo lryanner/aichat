@@ -782,6 +782,10 @@ class QMessageLabel(QLabel):
             super().mousePressEvent(e)
 
     def sizeHint(self) -> QSize:
+        """
+        Rewrite the sizeHint function to make the label's size fit the text.
+        :return:
+        """
         max_width_without_padding = self._max_width - 20
         metrics = self.fontMetrics()
         width = metrics.horizontalAdvance(self._message)

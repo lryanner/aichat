@@ -1,3 +1,5 @@
+import threading
+
 from PySide6.QtCore import QObject
 
 from ChatBot import ChatBotFactory, ChatBot
@@ -6,16 +8,28 @@ from PySide6.QtWidgets import QApplication
 import sys
 
 from data import DataLoader
-from event_center import EventCenter
+from event import MainWindowHintEvent
 from event_type import *
 
 
 class App(QObject):
+    """
+    The app class.
+    """
+    _instance = None
+    def __new__(cls, *args, **kwargs):
+        """
+        The singleton.
+        :param args:
+        :param kwargs:
+        """
+        if cls._instance is None:
+            cls._instance = super(App, cls).__new__(cls)
+        return cls._instance
     def __init__(self):
         super().__init__()
+        App._instance = self
         self.app = QApplication([])
-        self.event_center = EventCenter()
-        self.event_center.installEventFilter(self)
         self.data_loader = DataLoader()
         # install event filter
         self.data_loader.installEventFilter(self)
@@ -45,10 +59,13 @@ class App(QObject):
             self.chatbot_factory.create_chatbot(event.data)
         elif event.type() == DeleteChatBotEventType:
             self.chatbot_factory.delete_chatbot(event.chatbot_id)
-        elif event.type() == MainWindowHintEventType:
-            if obj is self.event_center:
-                self.gui.hint(event.hint_type, event.hint_message, interval=event.interval)
         return super().eventFilter(obj, event)
+
+    def event(self, e):
+        if isinstance(e, MainWindowHintEvent):
+            self.gui.hint(e.hint_type, e.hint_message, self.gui.default_hint_area, e.interval)
+            return True
+        return super().event(e)
 
     def init_gui(self, event: QEvent):
         self.gui = AppGUI(event.config_data, event.chatbots_data)
@@ -64,6 +81,12 @@ class App(QObject):
     def init_chatbot_factory(self, event: QEvent):
         self.chatbot_factory = ChatBotFactory(event.config_data, event.chatbots_data)
         self.chatbot_factory.installEventFilter(self)
+
+    @staticmethod
+    def get_instance():
+        if not App._instance:
+            App._instance = App()
+        return App._instance
 
 
 if __name__ == '__main__':

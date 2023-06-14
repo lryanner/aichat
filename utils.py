@@ -2,13 +2,16 @@ import hashlib
 import json
 import logging
 import random
-from datetime import datetime
 
 import winsound
 
 import pandas
 
 import numpy as np
+
+from event_center import EventCenter
+from event import *
+from AIChatEnum import *
 
 
 def load_json(file_name):
@@ -48,7 +51,7 @@ def copy_file(src, dst):
     shutil.copy(src, dst)
 
 def warn(warning):
-    logging.warning(warning)
+    EventCenter.send_event(MainWindowHintEvent(HintType.Warning, warning))
 
 def info(info_):
     logging.info(info_)
@@ -122,4 +125,5 @@ def remove_brackets_content(text):
     return re.sub(r'\(.*?\)', '', text)
 
 def get_current_time():
-    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    import datetime
+    return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
