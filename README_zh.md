@@ -36,6 +36,7 @@
 
 采用emotion-vits模型生成语音，可以生成带有情感的语音，已经将绫地宁宁的语音进行chatgpt预标记。采用的情感参考是nene-emotion的情感参考id。可以实现自动情感选择，虽然效果不是很好，但是可以用来玩玩。
 
+自动情感选择参考了langchain的提示词工程方法，使用文本的embbeding和上下文embbeding寻找与目标文本最接近的emotion。
 ## 进度
 - [x] 基本UI
 - [x] 和chatgpt聊天

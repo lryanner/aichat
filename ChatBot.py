@@ -127,17 +127,21 @@ class ChatThread(QThread):
 
 class SpeakThread(QThread):
     speak = Signal(MessageData)
-    def __init__(self, message_data: MessageData, speaker: Speaker, text):
+    def __init__(self, message_data: MessageData, speaker: Speaker, text, context):
         super().__init__()
         self._message_data = message_data
         self._speaker = speaker
         self._text = text
+        self._context = context
 
     def run(self) -> None:
-        emotion, nsfw = ChatBot.get_emotion_from_gpt(self._message_data.message)
-        if not emotion:
-            raise ChatGPTException('No emotion detected.')
-        path, emotion_sample = self._speaker.speak(self._text, id_=0, emotion=emotion, nsfw=nsfw)
+        # emotion, nsfw = ChatBot.get_emotion_from_gpt(self._message_data.message)
+
+        # if not emotion:
+        #     return
+        path, emotion_sample = self._speaker.speak(self._text, id_=0, context=self._context)
+        if not path or not emotion_sample:
+            return
         # rename the path to message_id
         utils.rename_file(path, self._message_data.message_id + '.wav')
         self.speak.emit(self._message_data)
@@ -194,14 +198,14 @@ class ChatBot(QObject):
     @Slot(str, MessageData)
     def speak_it(self, history_id, message_data: MessageData):
         """Speaks the message"""
-        def speak_it_after_translate(_message_data: MessageData, result: str):
+        def speak_it_after_translate(_message_data: MessageData, result: str, context=None):
             """
             Speaks the message after translating.
             :param _message_data: message data.
             :param result: the result of translation.
             :return:
             """
-            self._speak_thread = SpeakThread(_message_data, self._speaker, result)
+            self._speak_thread = SpeakThread(_message_data, self._speaker, result,context)
             self._speak_thread.speak.connect(lambda : self.speak.emit(history_id, _message_data))
             self._speak_thread.start()
         import langid
@@ -210,8 +214,11 @@ class ChatBot(QObject):
             speak_it_after_translate(message_data, utils.remove_brackets_content(message_data.message))
         else:
             # translate the message
+            context_ = self._chatbot_data.get_history(history_id).latest_n(5)
+            context_ = [utils.remove_brackets_content(message.message) for message in context_]
+            context_ = '\n'.join(context_)
             self._translate_thread = TranslateThread(message_data, self._translater_factory.active_translater)
-            self._translate_thread.translate.connect(speak_it_after_translate)
+            self._translate_thread.translate.connect(lambda message_data, result:speak_it_after_translate(message_data, result, context_))
             self._translate_thread.start()
 
 
@@ -249,7 +256,7 @@ class ChatBot(QObject):
                 nsfw: boolean, if nsfw
         """
         messages = [{'role': 'system',
-                     'content': '判断说话人说这句话时的语气，用5个简体中文词描述。这5个词请务必用\'/\'隔开。请用json格式给我结果，格式为{\"state\":这次说话的语气, \"not_safe_for_work\": ture of false}。除了json格式的内容外，不要添加任何内容！"'},
+                     'content': '判断说话人说这句话时的语气，用5个简体中文词描述。这5个词请务必用\'/\'隔开。请用json格式给我结果，格式为{\"state\":\"这次说话的语气\", \"not_safe_for_work\": ture of false}。除了json格式的内容外，不要添加任何内容！"'},
                     {'role': 'user', 'content': text}]
         try:
             response = openai.ChatCompletion.create(
@@ -262,11 +269,11 @@ class ChatBot(QObject):
             return ChatBot.get_emotion_from_gpt(text, temperature)
         try:
             content = utils.load_json_string(response['choices'][0]['message']['content'])
-            utils.warn('Get emotion from gpt: ' + str(content))
             return content['state'].split('/'), content['not_safe_for_work']
         except Exception as e:
-            utils.warn('Get emotion from gpt failed: ' + str(e) + 'retrying...')
-            return None
+            content = response['choices'][0]['message']['content']
+            utils.warn('Get emotion from gpt failed: ' + str(e) + ' ' + str(content))
+            return None, None
 
     @staticmethod
     def get_adv_emotion_from_gpt(text, temperature=0):

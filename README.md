@@ -34,6 +34,7 @@ To translate text, you need to get a API access, only support[Baidu](https://api
 
 Use emotion-vits to generate audio, you can choose the emotion you want to express. But you can't choose the emotion automatically. So, I add a feature that can auto choose the emotion. This feature is based on [nene-emotion](https://huggingface.co/spaces/innnky/nene-emotion/tree/main). It can detect the emotion of the text, and choose the emotion that is most similar to the emotion of the text. This feature is not perfect, but it can work well in most cases.
 
+Automatic emotion selection refers to the use of langchain’s prompt engineering method as a reference, utilizing the text’s embedding and contextual embedding to find the emotion that is closest to the target text.
 
 ## Progress
 - [x] Basic UI
