@@ -923,7 +923,7 @@ class ChatBotSettingDialog(QInWindowDialog):
     def input_data(self):
         result = {
             'gpt_params': {
-                'model': self._model_combobox.currentText(),
+                'model': self._model_combobox.currentText,
                 'temperature': self._temperature_input_box.value,
                 'top_p': self._top_p_input_box.value,
                 'frequency_penalty': self._frequency_penalty_input_box.value,

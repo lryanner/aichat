@@ -172,7 +172,7 @@ class SpeakerW2V2:
                             result = same
             return utils.shuffle_list(result)[0]
 
-    def get_emotion_sample_by_text(self, text, context=None):
+    def get_emotion_sample_by_text(self, text, context=None, translated_text=None):
         """
         Get the emotion sample by text.
         :param text: the text.
@@ -185,7 +185,7 @@ class SpeakerW2V2:
             )
             text_embedding = np.array(r['data'][0]['embedding'])
             context_embedding = np.array(r['data'][1]['embedding'])
-            result_embedding = text_embedding * 0.7 + context_embedding * 0.3
+            result_embedding = text_embedding * self._text_weight + context_embedding * self._context_weight
         else:
             r = openai.Embedding.create(
                 model='text-embedding-ada-002',
@@ -194,9 +194,9 @@ class SpeakerW2V2:
             text_embedding = np.array(r['data'][0]['embedding'])
             result_embedding = text_embedding
         topn_closest = utils.find_topn_closest_indices(result_embedding, self._processed_dialogues_emotion_mapping_npy,
-                                                       3).tolist()
+                                                       6).tolist()
         topn_closest_string = [list(self._dialogues_emotion_mapping.values())[index][0] for index in topn_closest]
-        index = utils.find_closest_string(text, topn_closest_string)
+        index = utils.find_closest_string(translated_text, topn_closest_string)
         return self._dialogue_emotion_ordering_mapping[str(topn_closest[index])]
 
     def play_emotion_sample_file(self, emotion, root):
@@ -283,8 +283,8 @@ class SpeakerVitsSimpleApi(SpeakerW2V2):
         :param emotion: [required] the emotion of the speaker. Must be a list of float. The emotion is an ADV model array.
         :return: file_path, emotion_sample
         """
-        if 'context' in kwargs:
-            emotion = self.get_emotion_sample_by_text(text, kwargs['context'])
+        if 'context' in kwargs and 'raw_text' in kwargs:
+            emotion = self.get_emotion_sample_by_text(kwargs['raw_text'], kwargs['context'], text)
         elif 'nsfw' in kwargs:
             emotion = self._get_emotion_sample(kwargs['emotion'], kwargs['nsfw'])
         fields = {

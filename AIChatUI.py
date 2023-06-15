@@ -257,6 +257,8 @@ class QLabelComboBox(QWidget):
         # match the current text with the combobox list
         return self._combobox_list.index(self._combobox.currentText())
 
+    currentText = Property(str, fget=currentText, fset=setCurrentText)
+
 
 class QLabelSliderInput(QWidget):
     """A container for a label, a horizontal slider and an input box
@@ -1312,8 +1314,8 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
         self._openai_api_widget = QWidget()
         self._openai_api_widget_layout = QSettableHLayout(content_margin=(0, 0, 0, 0), spacing=0, alignment=None)
         self._openai_api_widget.setLayout(self._openai_api_widget_layout)
-        self._openai_api_app_key_lineedit = QLabelComboBox('Model:', ['gpt-3.5-turbo','gpt-4'], label_width=70)
-        self._openai_api_widget_layout.addWidget(self._openai_api_app_key_lineedit)
+        self._openai_api_app_key_combobox = QLabelComboBox('Model:', ['gpt-3.5-turbo', 'gpt-4'], label_width=70)
+        self._openai_api_widget_layout.addWidget(self._openai_api_app_key_combobox)
 
 
         self._layout.addWidget(self._google_api_widget)
@@ -1323,7 +1325,7 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
         # when the api type is changed, change the api widget
         self._api_type_label_combobox.currentTextChanged.connect(self._change_api_widget)
         self._load_data(data)
-        self._change_api_widget(self._api_type_label_combobox.currentText())
+        self._change_api_widget(self._api_type_label_combobox.currentText)
 
     def _change_api_widget(self, api_type):
         if api_type == 'Baidu':
@@ -1373,7 +1375,7 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
                 case TranslaterAPIType.DeepL.value:
                     self._deepl_api_widget.api_key = config.api_key
                 case TranslaterAPIType.OpenAI.value:
-                    self._openai_api_app_key_lineedit.currentText = config.gpt_model
+                    self._openai_api_app_key_combobox.currentText = config.gpt_model
 
     def _data(self) -> TranslaterConfigDataList:
         data = TranslaterConfigDataList([
@@ -1381,28 +1383,28 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
                 'api_type': TranslaterAPIType.Baidu.value,
                 'app_id': self._baidu_api_app_id_lineedit.input_content,
                 'app_key': self._baidu_api_app_key_lineedit.input_content,
-                'active': 1 if self._api_type_label_combobox.currentText() == 'Baidu' and self._baidu_api_app_id_lineedit.input_content and self._baidu_api_app_key_lineedit else 0
+                'active': 1 if self._api_type_label_combobox.currentText == 'Baidu' and self._baidu_api_app_id_lineedit.input_content and self._baidu_api_app_key_lineedit.input_content else 0
             },
             {
                 'api_type': TranslaterAPIType.Google.value,
                 'api_key': self._google_api_widget.api_key,
-                'active': 1 if self._api_type_label_combobox.currentText() == 'Google' and self._google_api_widget.api_key else 0
+                'active': 1 if self._api_type_label_combobox.currentText == 'Google' and self._google_api_widget.api_key else 0
             },
             {
                 'api_type': TranslaterAPIType.Youdao.value,
                 'app_id': self._youdao_api_app_id_lineedit.input_content,
                 'app_key': self._youdao_api_app_key_lineedit.input_content,
-                'active': 1 if self._api_type_label_combobox.currentText() == 'Youdao' and self._youdao_api_app_id_lineedit.input_content and self._youdao_api_app_key_lineedit else 0
+                'active': 1 if self._api_type_label_combobox.currentText == 'Youdao' and self._youdao_api_app_id_lineedit.input_content and self._youdao_api_app_key_lineedit.input_content else 0
             },
             {
                 'api_type': TranslaterAPIType.DeepL.value,
                 'api_key': self._deepl_api_widget.api_key,
-                'active': 1 if self._api_type_label_combobox.currentText() == 'DeepL' and self._deepl_api_widget.api_key else 0
+                'active': 1 if self._api_type_label_combobox.currentText == 'DeepL' and self._deepl_api_widget.api_key else 0
             },
             {
                 'api_type': TranslaterAPIType.OpenAI.value,
-                'gpt_model': self._openai_api_app_key_lineedit.currentText,
-                'active': 1 if self._api_type_label_combobox.currentText() == 'OpenAI' and self._openai_api_app_key_lineedit.currentText else 0
+                'gpt_model': self._openai_api_app_key_combobox.currentText,
+                'active': 1 if self._api_type_label_combobox.currentText == 'OpenAI' and self._openai_api_app_key_combobox.currentText else 0
             }
         ])
         return data
@@ -1516,14 +1518,14 @@ class OpenAISettingGroup(QWidget, DataGUIInterface):
     def _data(self) -> OpenAIConfigData | GPTParamsData:
         if self._has_api_key:
             data = OpenAIConfigData(openai_api_key=self._chatgpt_api_key_input_box.input_content,
-                                    gpt_params={'model': self._chatgpt_model_combo_box.currentText(),
+                                    gpt_params={'model': self._chatgpt_model_combo_box.currentText,
                                                 'temperature': self._temperature_input_box.value,
                                                 'top_p': self._top_p_input_box.value,
                                                 'frequency_penalty': self._frequency_penalty_input_box.value,
                                                 'presence_penalty': self._presence_penalty_input_box.value,
                                                 'max_tokens': self._max_tokens_input_box.value})
         else:
-            data = GPTParamsData(model=self._chatgpt_model_combo_box.currentText(),
+            data = GPTParamsData(model=self._chatgpt_model_combo_box.currentText,
                                  temperature=self._temperature_input_box.value,
                                  top_p=self._top_p_input_box.value,
                                  frequency_penalty=self._frequency_penalty_input_box.value,
@@ -1589,7 +1591,7 @@ class VITSSettingGroup(QWidget, DataGUIInterface):
         self._nene_emotion_setting_container = VITSSettingContainer(data.get_vits_config(SpeakerAPIType.NeneEmotion.value))
         self._layout.addWidget(self._nene_emotion_setting_container)
         self._load_data(data)
-        self._change_vits_api_type(self._vits_api_type_input_box.currentText())
+        self._change_vits_api_type(self._vits_api_type_input_box.currentText)
 
     def _change_vits_api_type(self, api_type: str):
         if api_type == SpeakerAPIType.VitsSimpleAPI.name:
@@ -1615,13 +1617,13 @@ class VITSSettingGroup(QWidget, DataGUIInterface):
                 'api_type': SpeakerAPIType.VitsSimpleAPI.value,
                 'api_address': self._vits_simple_setting_container.api_address,
                 'api_port': self._vits_simple_setting_container.api_port,
-                'active': 1 if self._vits_api_type_input_box.currentText() == 'VitsSimpleAPI' and self._vits_simple_setting_container.api_address and self._vits_simple_setting_container.api_port else 0
+                'active': 1 if self._vits_api_type_input_box.currentText == 'VitsSimpleAPI' and self._vits_simple_setting_container.api_address and self._vits_simple_setting_container.api_port else 0
             },
             {
                 'api_type': SpeakerAPIType.NeneEmotion.value,
                 'api_address': self._nene_emotion_setting_container.api_address,
                 'api_port': self._nene_emotion_setting_container.api_port,
-                'active': 1 if self._vits_api_type_input_box.currentText() == 'NeneEmotion' and self._nene_emotion_setting_container.api_address and self._nene_emotion_setting_container.api_port else 0
+                'active': 1 if self._vits_api_type_input_box.currentText == 'NeneEmotion' and self._nene_emotion_setting_container.api_address and self._nene_emotion_setting_container.api_port else 0
             }
         ])
 

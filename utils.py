@@ -51,7 +51,7 @@ def copy_file(src, dst):
     shutil.copy(src, dst)
 
 def warn(warning):
-    logging.warning(warning)
+    print(warning)
     EventCenter.send_event(MainWindowHintEvent(HintType.Warning, warning))
 
 def info(info_):

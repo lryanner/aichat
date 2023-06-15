@@ -82,7 +82,7 @@ class ChatBotFactory(QObject):
 
 
 class ChatThread(QThread):
-    sendMessage = Signal(str, MessageData) # history id, message data
+    sendMessage = Signal(str, MessageData)  # history id, message data
 
     def __init__(self, history_id, chatbot_data):
         super().__init__()
@@ -127,19 +127,21 @@ class ChatThread(QThread):
 
 class SpeakThread(QThread):
     speak = Signal(MessageData)
-    def __init__(self, message_data: MessageData, speaker: Speaker, text, context):
+
+    def __init__(self, message_data: MessageData, speaker: Speaker, text, context, raw_text):
         super().__init__()
         self._message_data = message_data
         self._speaker = speaker
         self._text = text
         self._context = context
+        self._raw_text = raw_text
 
     def run(self) -> None:
         # emotion, nsfw = ChatBot.get_emotion_from_gpt(self._message_data.message)
 
         # if not emotion:
         #     return
-        path, emotion_sample = self._speaker.speak(self._text, id_=0, context=self._context)
+        path, emotion_sample = self._speaker.speak(self._text, id_=0, context=self._context, raw_text=self._raw_text)
         if not path or not emotion_sample:
             return
         # rename the path to message_id
@@ -149,6 +151,7 @@ class SpeakThread(QThread):
 
 class TranslateThread(QThread):
     translate = Signal(MessageData, str)
+
     def __init__(self, message_data: MessageData, translater: Translater):
         super().__init__()
         self._message_data = message_data
@@ -160,10 +163,11 @@ class TranslateThread(QThread):
         result = self._translater.translate(text)
         self.translate.emit(self._message_data, result)
 
+
 class ChatBot(QObject):
     """The chatbot."""
-    sendMessage = Signal(str, MessageData) # history id, message data
-    speak = Signal(str, MessageData) # history id, message data
+    sendMessage = Signal(str, MessageData)  # history id, message data
+    speak = Signal(str, MessageData)  # history id, message data
 
     def __init__(self, chatbot_data: ChatBotData, speaker, translater_factory, limit_token=3400):
         """
@@ -198,29 +202,36 @@ class ChatBot(QObject):
     @Slot(str, MessageData)
     def speak_it(self, history_id, message_data: MessageData):
         """Speaks the message"""
-        def speak_it_after_translate(_message_data: MessageData, result: str, context=None):
+
+        def speak_it_after_translate(_message_data: MessageData, result: str, context=None, raw_text=None):
             """
             Speaks the message after translating.
             :param _message_data: message data.
             :param result: the result of translation.
+            :param context: the context.
+            :param raw_text: the raw text which is not translated.
             :return:
             """
-            self._speak_thread = SpeakThread(_message_data, self._speaker, result,context)
-            self._speak_thread.speak.connect(lambda : self.speak.emit(history_id, _message_data))
+            self._speak_thread = SpeakThread(_message_data, self._speaker, result, context, raw_text)
+            self._speak_thread.speak.connect(lambda: self.speak.emit(history_id, _message_data))
             self._speak_thread.start()
+
         import langid
         lang = langid.classify(message_data.message)[0]
+        context_ = self._chatbot_data.get_history(history_id).latest_n(5)
+        context_ = [utils.remove_brackets_content(message.message) for message in context_]
+        context_ = '\n'.join(context_)
+        raw_text = message_data.message
         if lang == 'ja':
-            speak_it_after_translate(message_data, utils.remove_brackets_content(message_data.message))
+            speak_it_after_translate(message_data, utils.remove_brackets_content(message_data.message), context_,
+                                     raw_text)
         else:
             # translate the message
-            context_ = self._chatbot_data.get_history(history_id).latest_n(5)
-            context_ = [utils.remove_brackets_content(message.message) for message in context_]
-            context_ = '\n'.join(context_)
-            self._translate_thread = TranslateThread(message_data, self._translater_factory.active_translater)
-            self._translate_thread.translate.connect(lambda message_data, result:speak_it_after_translate(message_data, result, context_))
-            self._translate_thread.start()
 
+            self._translate_thread = TranslateThread(message_data, self._translater_factory.active_translater)
+            self._translate_thread.translate.connect(
+                lambda message_data, result: speak_it_after_translate(message_data, result, context_, raw_text))
+            self._translate_thread.start()
 
     def summarize(self):
         """Summarizes the chat history"""
