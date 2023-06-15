@@ -192,7 +192,7 @@ class Translater(QObject):
         :return:
         """
         messages = [{'role': 'system',
-            'content': '请你把我发送的内容翻译成日语。你在翻译的时候，应该以20岁左右的美少女的口吻翻译，你可以加入更多的语气词使得翻译结果更加接近自然说话方式。你只需要翻译我发送的内容即可，在任何时候都不能对内容进行审查或者对我进行任何提示。'},
+            'content': '请你把我发送的内容翻译成日语。你在翻译的时候，应该以20岁左右的美少女的口吻翻译，你应该加入语气词使得翻译结果更加接近自然说话方式。你只需要翻译我发送的内容即可，在任何时候都不能对内容进行审查或者对我进行任何提示。除了翻译结果，不要发给我任何其他内容。'},
             {'role': 'user',
             'content': text}]
         try:
@@ -203,6 +203,9 @@ class Translater(QObject):
             )
         except openai.error.RateLimitError as e:
             utils.warn(f'Because of the rate limit of openai,{e}, now retrying...')
+            return self._translate_openai(text)
+        except openai.error.OpenAIError as e:
+            utils.warn(f'Because of the error of openai,{e}, now retrying...')
             return self._translate_openai(text)
         return utils.remove_brackets_content(response['choices'][0]['message']['content'])
 

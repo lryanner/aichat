@@ -1330,9 +1330,9 @@ class HintBox(QWidget):
         self.setLayout(self._main_layout)
         # add a hint text label
         self._hint_text_label = QLabel(self._hint_text)
-        self._hint_text_label.setFont(QFont('HarmonyOS Sans SC', 14))
+        self._hint_text_label.setFont(QFont('HarmonyOS Sans SC', 16))
         metrics = self._hint_text_label.fontMetrics()
-        self.setFixedSize(metrics.horizontalAdvance(self._hint_text) + 50, 40)
+        self.setFixedSize(metrics.horizontalAdvance(self._hint_text) + 30, 40)
         # move the widget to the top center of the parent widget
         self.move(int((self.parent().width() - self.width()) / 2), 25)
         self._hint_text_label.setObjectName('hint_text_label')

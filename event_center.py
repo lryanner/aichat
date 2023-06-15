@@ -29,6 +29,4 @@ class EventCenter(QObject):
         :param event: the event.
         :return:
         """
-        if not EventCenter._instance:
-            EventCenter._instance = EventCenter()
         QApplication.postEvent(AppGUI.get_instance(), event)

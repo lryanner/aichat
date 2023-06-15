@@ -51,6 +51,7 @@ def copy_file(src, dst):
     shutil.copy(src, dst)
 
 def warn(warning):
+    logging.warning(warning)
     EventCenter.send_event(MainWindowHintEvent(HintType.Warning, warning))
 
 def info(info_):
@@ -71,6 +72,28 @@ def get_similar_array_index(array, target):
     result = np.linalg.norm(array - target, axis=1)
     result = np.argmin(result)
     return result
+
+
+def find_topn_closest_indices(target_array, data_array, topn):
+    """
+    find the topn closest indices of target_array in data_array.
+    """
+    # calculate the distance between target_array and data_array
+    distances = np.linalg.norm(data_array - target_array, axis=1)
+
+    # find the topn closest indices
+    topn_indices = np.argpartition(distances, topn)[:topn]
+
+    return topn_indices
+
+
+def find_closest_string(target, string_list:list):
+    """
+    find the string in the given string list's index that is closest in len to the target string
+    """
+    closest_string = min(string_list, key=lambda x: abs(len(x) - len(target)))
+
+    return string_list.index(closest_string)
 
 def get_similar_array(array, target):
     if not isinstance(array, np.ndarray):

@@ -1,10 +1,11 @@
-from PySide6.QtCore import Slot, Signal, QSize, QPoint, QPointF, QEvent, QStringListModel, QRectF, QSizeF, Property
+from PySide6.QtCore import Slot, Signal, QSize, QPoint, QPointF, QEvent, QStringListModel, QRectF, QSizeF, Property, \
+    QSequentialAnimationGroup
 from PySide6.QtGui import Qt, QFont, QMouseEvent, QPixmap, QKeyEvent, QPaintEvent, QPainter, QPen, QColor, QResizeEvent, \
-    QEnterEvent, QPainterPath, QHoverEvent
+    QEnterEvent, QPainterPath, QHoverEvent, QBrush
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QHBoxLayout, QPushButton, QSpacerItem, \
     QSizePolicy, QButtonGroup, QLineEdit, QPlainTextEdit, QLabel, QFrame, QMenu, QGraphicsDropShadowEffect, QFileDialog, \
     QGraphicsColorizeEffect, QComboBox, \
-    QSlider, QApplication, QBoxLayout
+    QSlider, QApplication, QBoxLayout, QAbstractButton, QGraphicsRectItem, QGraphicsEllipseItem
 from qframelesswindow import FramelessMainWindow, TitleBar, TitleBarButton
 from qframelesswindow.titlebar.title_bar_buttons import TitleBarButtonState
 

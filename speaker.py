@@ -4,6 +4,8 @@ import re
 import string
 import time
 
+import numpy as np
+import openai
 import requests
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
@@ -18,7 +20,10 @@ from exceptions import SpeakerException
 class Speaker:
     def __init__(self, vits_config: VITSConfigDataList,
                  emotion_mapping_path='./resources/mapping/emotion_no_duplicated.csv',
-                 marked_emotion_mapping_path='./resources/mapping/nene_emotion_mapping.json'):
+                 marked_emotion_mapping_path='./resources/mapping/nene_emotion_mapping.json',
+                 dialogue_emotion_ordering_mapping_path='./resources/mapping/dialogue_emotion_ordering_mapping.json',
+                 dialogues_emotion_mapping_path='./resources/mapping/dialogues_emotion_mapping.json',
+                 dialogues_emotion_mapping_npy_path='./resources/mapping/dialogues_emotion_mapping.npy',):
         """
         The speaker class.
         :param vits_config: The vits config.
@@ -27,6 +32,9 @@ class Speaker:
         self._config = vits_config
         self._emotion_mapping_path = emotion_mapping_path
         self._marked_emotion_mapping_path = marked_emotion_mapping_path
+        self._dialogue_emotion_ordering_mapping_path = dialogue_emotion_ordering_mapping_path
+        self._dialogues_emotion_mapping_path = dialogues_emotion_mapping_path
+        self._dialogues_emotion_mapping_npy_path = dialogues_emotion_mapping_npy_path
         self._speaker = None
 
 
@@ -40,10 +48,20 @@ class Speaker:
 
         if active_config.api_type == SpeakerAPIType.NeneEmotion.value:
             self._speaker = SpeakerNeneEmotion(
-                self.join_address(active_config.api_address, active_config.api_port), emotion_mapping_path, self._marked_emotion_mapping_path)
+                self.join_address(active_config.api_address, active_config.api_port),
+                emotion_mapping_path,
+                self._marked_emotion_mapping_path,
+                self._dialogue_emotion_ordering_mapping_path,
+                self._dialogues_emotion_mapping_path,
+                self._dialogues_emotion_mapping_npy_path)
         elif active_config.api_type == SpeakerAPIType.VitsSimpleAPI.value:
             self._speaker = SpeakerVitsSimpleApi(
-                self.join_address(active_config.api_address, active_config.api_port), emotion_mapping_path, self._marked_emotion_mapping_path)
+                self.join_address(active_config.api_address, active_config.api_port),
+                emotion_mapping_path,
+                self._marked_emotion_mapping_path,
+                self._dialogue_emotion_ordering_mapping_path,
+                self._dialogues_emotion_mapping_path,
+                self._dialogues_emotion_mapping_npy_path)
 
     @staticmethod
     def join_address(api_address, api_port):
@@ -82,7 +100,11 @@ class Speaker:
 
 
 class SpeakerW2V2:
-    def __init__(self, api_address, emotion_mapping_path, marked_emotion_mapping_path):
+    def __init__(self, api_address, emotion_mapping_path,
+                 marked_emotion_mapping_path,
+                 dialogue_emotion_ordering_mapping_path,
+                 dialogues_emotion_mapping_path,
+                 dialogues_emotion_mapping_npy_path):
         """
         The speaker class for nene emotion. This class is callable.
 
@@ -100,6 +122,10 @@ class SpeakerW2V2:
                                self._emotion_mapping if emotion['nsfw'] == 1]
         self._sfw_emotions = [[emotion['arousal'], emotion['dominance'], emotion['valence']] for emotion in
                               self._emotion_mapping if emotion['nsfw'] == 0]
+        self._dialogue_emotion_ordering_mapping = utils.load_json(dialogue_emotion_ordering_mapping_path)
+        self._dialogues_emotion_mapping = utils.load_json(dialogues_emotion_mapping_path)
+        self._dialogues_emotion_mapping_npy = np.load(dialogues_emotion_mapping_npy_path)
+        self._processed_dialogues_emotion_mapping_npy = self._dialogues_emotion_mapping_npy[:,0,:]*0.7+self._dialogues_emotion_mapping_npy[:,1,:]*0.3
 
     @property
     def last_emotion_sample(self):
@@ -143,7 +169,31 @@ class SpeakerW2V2:
                             result = same
             return utils.shuffle_list(result)[0]
 
-
+    def get_emotion_sample_by_text(self, text, context=None):
+        """
+        Get the emotion sample by text.
+        :param text: the text.
+        :return:
+        """
+        if context:
+            r = openai.Embedding.create(
+                model='text-embedding-ada-002',
+                input=[text, context]
+            )
+            text_embedding = np.array(r['data'][0]['embedding'])
+            context_embedding = np.array(r['data'][1]['embedding'])
+            result_embedding = text_embedding * 0.7 + context_embedding * 0.3
+        else:
+            r = openai.Embedding.create(
+                model='text-embedding-ada-002',
+                input=text,
+            )
+            text_embedding = np.array(r['data'][0]['embedding'])
+            result_embedding = text_embedding
+        topn_closest = utils.find_topn_closest_indices(result_embedding, self._processed_dialogues_emotion_mapping_npy, 3).tolist()
+        topn_closest_string = [list(self._dialogues_emotion_mapping.values())[index][0] for index in topn_closest]
+        index = utils.find_closest_string(text, topn_closest_string)
+        return self._dialogue_emotion_ordering_mapping[str(topn_closest[index])]
 
     def play_emotion_sample_file(self, emotion, root):
         """
@@ -160,7 +210,12 @@ class SpeakerW2V2:
 
 
 class SpeakerNeneEmotion(SpeakerW2V2):
-    def __init__(self, api_address, emotion_mapping_path, marked_emotion_mapping_path):
+    def __init__(self, api_address,
+                 emotion_mapping_path,
+                 marked_emotion_mapping_path,
+                 dialogue_emotion_ordering_mapping_path,
+                 dialogues_emotion_mapping_path,
+                 dialogues_emotion_mapping_npy_path):
         """
         The speaker class for nene emotion. This class is callable.
 
@@ -168,7 +223,11 @@ class SpeakerNeneEmotion(SpeakerW2V2):
         :param emotion_model_path: The path of the nene emotion mapping.
         """
         self._client = Client(api_address)
-        super().__init__(api_address, emotion_mapping_path, marked_emotion_mapping_path)
+        super().__init__(api_address, emotion_mapping_path,
+                         marked_emotion_mapping_path,
+                         dialogue_emotion_ordering_mapping_path,
+                         dialogues_emotion_mapping_path,
+                         dialogues_emotion_mapping_npy_path)
 
     def __call__(self, text, **kwargs):
         """
@@ -195,11 +254,21 @@ class SpeakerNeneEmotion(SpeakerW2V2):
 
 
 class SpeakerVitsSimpleApi(SpeakerW2V2):
-    def __init__(self, api_address, emotion_mapping_path, marked_emotion_mapping_path):
+    def __init__(self, api_address,
+                 emotion_mapping_path,
+                 marked_emotion_mapping_path,
+                 dialogue_emotion_ordering_mapping_path,
+                 dialogues_emotion_mapping_path,
+                 dialogues_emotion_mapping_npy_path):
         """
         The speaker class for vits simple api. This class is callable.
         """
-        super().__init__(api_address, emotion_mapping_path, marked_emotion_mapping_path)
+        super().__init__(api_address,
+                         emotion_mapping_path,
+                         marked_emotion_mapping_path,
+                         dialogue_emotion_ordering_mapping_path,
+                         dialogues_emotion_mapping_path,
+                         dialogues_emotion_mapping_npy_path)
 
     def __call__(self, text, id_=0, format_="wav", lang="ja", length=1, noise=0.667, noisew=0.8, max_=50, **kwargs):
         """
@@ -210,7 +279,9 @@ class SpeakerVitsSimpleApi(SpeakerW2V2):
         :param emotion: [required] the emotion of the speaker. Must be a list of float. The emotion is an ADV model array.
         :return: file_path, emotion_sample
         """
-        if 'nsfw' in kwargs:
+        if 'context' in kwargs:
+            emotion = self.get_emotion_sample_by_text(text, kwargs['context'])
+        elif 'nsfw' in kwargs:
             emotion = self._get_emotion_sample(kwargs['emotion'], kwargs['nsfw'])
         fields = {
             "text": text,
@@ -235,7 +306,8 @@ class SpeakerVitsSimpleApi(SpeakerW2V2):
             utils.warn(f"[Vits Simple API]ConnectionError, retrying...")
             return self(text, id_, format_, lang, length, noise, noisew, max_, **kwargs)
         if res.status_code != 200:
-            raise SpeakerException(f"Error: {res.status_code}, {res.text}")
+            utils.warn(f"[Vits Simple API]Status code: {res.status_code}, please check the server.")
+            return None, None
         file_name = re.findall("filename=(.+)", res.headers["Content-Disposition"])[0]
         path = f"{self._out_put_path}\\{file_name}"
         if not os.path.exists(path):
