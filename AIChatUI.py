@@ -1,11 +1,11 @@
 from PySide6.QtCore import Slot, Signal, QSize, QPoint, QPointF, QEvent, QStringListModel, QRectF, QSizeF, Property, \
-    QSequentialAnimationGroup
+    QSequentialAnimationGroup, QPropertyAnimation, QRect, QParallelAnimationGroup, QEasingCurve, QTimer
 from PySide6.QtGui import Qt, QFont, QMouseEvent, QPixmap, QKeyEvent, QPaintEvent, QPainter, QPen, QColor, QResizeEvent, \
     QEnterEvent, QPainterPath, QHoverEvent, QBrush
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QHBoxLayout, QPushButton, QSpacerItem, \
     QSizePolicy, QButtonGroup, QLineEdit, QPlainTextEdit, QLabel, QFrame, QMenu, QGraphicsDropShadowEffect, QFileDialog, \
     QGraphicsColorizeEffect, QComboBox, \
-    QSlider, QApplication, QBoxLayout, QAbstractButton, QGraphicsRectItem, QGraphicsEllipseItem
+    QSlider, QApplication, QBoxLayout, QAbstractButton, QGraphicsRectItem, QGraphicsEllipseItem, QScrollBar
 from qframelesswindow import FramelessMainWindow, TitleBar, TitleBarButton
 from qframelesswindow.titlebar.title_bar_buttons import TitleBarButtonState
 
@@ -359,7 +359,7 @@ class QChatBotButton(QPushButton):
         self._description = description
         self.setCheckable(True)
         self.setFixedSize(200, 80)
-        self.clicked.connect(lambda : self.checked.emit(self._id))
+        self.clicked.connect(lambda: self.checked.emit(self._id))
         self.setChecked(True)
         # add a main container
         self._main_container = QWidget(self)
@@ -836,7 +836,8 @@ class QMessageOverflowButtonsContainer(QWidget):
     deleteClicked = Signal()
     copyClicked = Signal()
 
-    def __init__(self, size, move_point, is_user, parent=None, startPlay=None, stopPlay=None, resendClicked=None, deleteClicked=None, copyClicked=None):
+    def __init__(self, size, move_point, is_user, parent=None, startPlay=None, stopPlay=None, resendClicked=None,
+                 deleteClicked=None, copyClicked=None):
         super().__init__(parent)
         self._is_playing = False
         self.setObjectName('message_overflow_buttons_container')
@@ -891,7 +892,6 @@ class QMessageOverflowButtonsContainer(QWidget):
             self.show()
         if not value and not self.parent().is_hover:
             self.hide()
-
 
     def hide(self) -> None:
         if self._is_playing:
@@ -1250,15 +1250,110 @@ class QAvatarLabel(QLabel):
     avatar_path = Property(str, fget=lambda self: self._avatar_path, fset=set_image)
 
 
+class SmoothScrollBar(QScrollBar):
+    """ Smooth scroll bar """
+
+    scrollFinished = Signal()
+
+    def __init__(self, parent=None):
+        QScrollBar.__init__(self, parent)
+        self.rangeChanged.connect(lambda : self.scrollTo(self.maximum(), False))
+        self.ani = QPropertyAnimation()
+        self.ani.setTargetObject(self)
+        self.ani.setPropertyName(b"value")
+        self.ani.setEasingCurve(QEasingCurve.OutExpo)
+        self.ani.setDuration(500)
+        # self.bounce_ani = QPropertyAnimation()
+        # self.bounce_ani.setTargetObject(self)
+        # self.bounce_ani.setPropertyName(b"value")
+        # self.bounce_ani.setEasingCurve(QEasingCurve.InCubic)
+        # self.bounce_ani.setDuration(500)
+        # self.virtual_max = self.maximum() + self.pageStep()
+        # self.virtual_min = self.minimum() - self.pageStep()
+        self.__value = self.value()
+        self.ani.finished.connect(self.scrollFinished)
+
+    def setValue(self, value: int, is_animate=True):
+        if value == self.value():
+            return
+
+        if is_animate:
+            # stop running animation
+            self.ani.stop()
+            self.scrollFinished.emit()
+            self.ani.setStartValue(self.value())
+            self.ani.setEndValue(value)
+            self.ani.start()
+        else:
+            super().setValue(value)
+
+    def scrollValue(self, value: int):
+        """ scroll the specified distance """
+        self.__value += value
+        self.__value = max(self.minimum(), self.__value)
+        self.__value = min(self.maximum(), self.__value)
+        self.setValue(self.__value)
+
+    def scrollTo(self, value: int, is_animate=True):
+        """ scroll to the specified position """
+        self.__value = value
+        self.__value = max(self.minimum(), self.__value)
+        self.__value = min(self.maximum(), self.__value)
+        self.setValue(self.__value, is_animate)
+
+    def resetValue(self, value):
+        self.__value = value
+
+    def mousePressEvent(self, e):
+        self.ani.stop()
+        super().mousePressEvent(e)
+        self.__value = self.value()
+
+    def mouseReleaseEvent(self, e):
+        self.ani.stop()
+        super().mouseReleaseEvent(e)
+        self.__value = self.value()
+
+    def mouseMoveEvent(self, e):
+        self.ani.stop()
+        super().mouseMoveEvent(e)
+        self.__value = self.value()
+
+
 class QNoBarScrollArea(QScrollArea):
     def __init__(self, widget, parent=None):
         super().__init__(parent)
+        self.hScrollBar = SmoothScrollBar(self)
+        self.hScrollBar.setOrientation(Qt.Horizontal)
+        self.setHorizontalScrollBar(self.hScrollBar)
+        self.vScrollBar = SmoothScrollBar(self)
+        self.vScrollBar.setOrientation(Qt.Vertical)
+        self.setVerticalScrollBar(self.vScrollBar)
         self.setWidgetResizable(True)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.setFrameStyle(QFrame.NoFrame)
         self.setWidget(widget)
+
+    def setScrollAnimation(self, orient, duration, easing=QEasingCurve.OutCubic):
+        """ set scroll animation
+        Parameters
+      ----------
+        orient: Orient
+            scroll orientation
+        duration: int
+            scroll duration
+        easing: QEasingCurve
+            animation type
+        """
+        bar = self.vScrollBar if orient == Qt.Horizontal else self.hScrollBar
+        bar.ani.setDuration(duration)
+        bar.ani.setEasingCurve(easing)
+
+    def wheelEvent(self, e):
+        if e.modifiers() == Qt.NoModifier:
+            self.vScrollBar.scrollValue(-e.angleDelta().y())
 
 
 class QSettableVLayout(QVBoxLayout):
@@ -1317,7 +1412,6 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
         self._openai_api_app_key_combobox = QLabelComboBox('Model:', ['gpt-3.5-turbo', 'gpt-4'], label_width=70)
         self._openai_api_widget_layout.addWidget(self._openai_api_app_key_combobox)
 
-
         self._layout.addWidget(self._google_api_widget)
         self._layout.addWidget(self._youdao_api_widget)
         self._layout.addWidget(self._deepl_api_widget)
@@ -1361,7 +1455,8 @@ class TranslaterSettingGroup(QWidget, DataGUIInterface):
 
     def _load_data(self, data: TranslaterConfigDataList):
         self._api_type_label_combobox.setCurrentText(
-            AIChatEnum.TranslaterAPIType.from_value(data.get_active_translater_config().api_type).name if data.get_active_translater_config() else 'Baidu')
+            AIChatEnum.TranslaterAPIType.from_value(
+                data.get_active_translater_config().api_type).name if data.get_active_translater_config() else 'Baidu')
         for config in data:
             match config.api_type:
                 case TranslaterAPIType.Baidu.value:
@@ -1542,7 +1637,9 @@ class OpenAISettingGroup(QWidget, DataGUIInterface):
             return self._chatgpt_api_key_input_box.input_content and True
         else:
             return True
+
     data = Property(Data, _data, fset=_load_data)
+
 
 class VITSSettingContainer(QWidget, DataGUIInterface):
     def __init__(self, data: VITSConfigData, parent=None):
@@ -1586,9 +1683,11 @@ class VITSSettingGroup(QWidget, DataGUIInterface):
         self._vits_api_type_input_box = QLabelComboBox('API Type: ', data.api_type_list())
         self._vits_api_type_input_box.currentTextChanged.connect(self._change_vits_api_type)
         self._layout.addWidget(self._vits_api_type_input_box)
-        self._vits_simple_setting_container = VITSSettingContainer(data.get_vits_config(SpeakerAPIType.VitsSimpleAPI.value))
+        self._vits_simple_setting_container = VITSSettingContainer(
+            data.get_vits_config(SpeakerAPIType.VitsSimpleAPI.value))
         self._layout.addWidget(self._vits_simple_setting_container)
-        self._nene_emotion_setting_container = VITSSettingContainer(data.get_vits_config(SpeakerAPIType.NeneEmotion.value))
+        self._nene_emotion_setting_container = VITSSettingContainer(
+            data.get_vits_config(SpeakerAPIType.NeneEmotion.value))
         self._layout.addWidget(self._nene_emotion_setting_container)
         self._load_data(data)
         self._change_vits_api_type(self._vits_api_type_input_box.currentText)
@@ -1602,7 +1701,8 @@ class VITSSettingGroup(QWidget, DataGUIInterface):
             self._nene_emotion_setting_container.show()
 
     def _load_data(self, data: VITSConfigDataList):
-        self._vits_api_type_input_box.setCurrentText(SpeakerAPIType(data.get_active_vits_config().api_type).name if data.get_active_vits_config() else SpeakerAPIType.VitsSimpleAPI.name)
+        self._vits_api_type_input_box.setCurrentText(SpeakerAPIType(
+            data.get_active_vits_config().api_type).name if data.get_active_vits_config() else SpeakerAPIType.VitsSimpleAPI.name)
         for vits_config in data:
             if vits_config.api_type == SpeakerAPIType.VitsSimpleAPI.value:
                 self._vits_simple_setting_container.api_address = vits_config.api_address
@@ -1631,3 +1731,176 @@ class VITSSettingGroup(QWidget, DataGUIInterface):
         return self._data().has_active_vits()
 
     data = Property(VITSConfigDataList, _data, fset=_load_data)
+
+
+class QRoundLabel(QLabel):
+    def __init__(self, color, radius, parent):
+        super().__init__(parent)
+        self._color = color
+        self._radius = radius
+
+    def paintEvent(self, e: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(self._color))
+        painter.drawRoundedRect(self.rect(), self._radius, self._radius)
+        super().paintEvent(e)
+
+
+class LoadingAnimationButton(QAbstractButton):
+    """
+    A button with a loading animation.
+    """
+    clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._hover = False
+        self._click_animation = None
+        self._animation = QSequentialAnimationGroup()
+        self._hover_animation = QParallelAnimationGroup()
+        self._animation_timer = QTimer()
+        self._animation_timer.timeout.connect(self._loop_animation_start)
+        self._width = 80
+        self._height = 50
+        center_x = self._width / 2
+        center_y = self._height * 0.45
+        eye_width = self._width * 0.1
+        eye_height = self._height * 0.4
+        spacing = self._width * 0.3
+        self.setFixedSize(self._width, self._height)
+        self.setStyleSheet('background: transparent;')
+        self._right_eye = QRoundLabel(QColor('#33A6B8'), 5, self)
+        self._left_eye = QRoundLabel(QColor('#33A6B8'), 5, self)
+        self._init_animation(center_x, center_y, eye_width, eye_height, spacing)
+        self._animation.setLoopCount(1)
+        self._loop_animation_start()
+
+    def _init_animation(self, center_x, center_y, eye_width, eye_height, spacing):
+        eye_height_after = self._height * 0.01
+        self._eye_blink = QParallelAnimationGroup()
+        self._left_eye_blink = QPropertyAnimation(self._left_eye, b'geometry')
+        self._left_eye_blink.setDuration(200)
+        self._left_eye_blink.setStartValue(
+            QRect(QPoint(int(center_x + spacing / 2 - eye_width / 2), int(center_y - eye_height / 2)),
+                  QSize(int(eye_width), int(eye_height))))
+        self._left_eye_blink.setKeyValueAt(0.5, QRect(
+            QPoint(int(center_x + spacing / 2 - eye_width / 2), int(center_y - eye_height_after / 2)),
+            QSize(int(eye_width), int(eye_height_after))))
+        self._left_eye_blink.setEndValue(
+            QRect(QPoint(int(center_x + spacing / 2 - eye_width / 2), int(center_y - eye_height / 2)),
+                  QSize(int(eye_width), int(eye_height))))
+        self._left_eye_blink.setEasingCurve(QEasingCurve.InCurve)
+        self._right_eye_blink = QPropertyAnimation(self._right_eye, b'geometry')
+        self._right_eye_blink.setDuration(200)
+        self._right_eye_blink.setStartValue(
+            QRect(QPoint(int(center_x - eye_width / 2 - spacing / 2), int(center_y - eye_height / 2)),
+                  QSize(int(eye_width), int(eye_height))))
+        self._right_eye_blink.setKeyValueAt(0.5, QRect(
+            QPoint(int(center_x - eye_width / 2 - spacing / 2), int(center_y - eye_height_after / 2)),
+            QSize(int(eye_width), int(eye_height_after))))
+        self._right_eye_blink.setEndValue(
+            QRect(QPoint(int(center_x - eye_width / 2 - spacing / 2), int(center_y - eye_height / 2)),
+                  QSize(int(eye_width), int(eye_height))))
+        self._right_eye_blink.setEasingCurve(QEasingCurve.InCurve)
+        self._eye_blink.addAnimation(self._left_eye_blink)
+        self._eye_blink.addAnimation(self._right_eye_blink)
+        self._eye_blink.setLoopCount(2)
+        self._animation.addAnimation(self._eye_blink)
+        copied_left_eye_blink = self.copy_animation(self._left_eye_blink)
+        copied_left_eye_blink.setKeyValueAt(0.5, QRect(
+            QPoint(int(center_x + spacing / 2 - eye_width / 2), int(center_y - eye_height_after / 2)),
+            QSize(int(eye_width), int(eye_height_after))))
+        copied_right_eye_blink = self.copy_animation(self._right_eye_blink)
+        copied_right_eye_blink.setKeyValueAt(0.5, QRect(
+            QPoint(int(center_x - eye_width / 2 - spacing / 2), int(center_y - eye_height_after / 2)),
+            QSize(int(eye_width), int(eye_height_after))))
+        self._hover_animation.addAnimation(copied_left_eye_blink)
+        self._hover_animation.addAnimation(copied_right_eye_blink)
+        self._hover_animation.setLoopCount(2)
+        self._eye_move = QParallelAnimationGroup()
+        center_x_left = center_x - spacing * 0.3
+        center_x_right = center_x + spacing * 0.5
+        self._left_eye_move = QPropertyAnimation(self._left_eye, b'geometry')
+        self._left_eye_move.setDuration(800)
+        self._left_eye_move.setStartValue(
+            QRect(QPoint(int(center_x - spacing / 2 - eye_width / 2), int(center_y - eye_height / 2)),
+                  QSize(int(eye_width), int(eye_height))))
+        self._left_eye_move.setKeyValueAt(0.3, QRect(
+            QPoint(int(center_x_left - eye_width / 2 - spacing / 2), int(center_y - eye_height / 2)),
+            QSize(int(eye_width), int(eye_height))))
+        self._left_eye_move.setKeyValueAt(0.6, QRect(
+            QPoint(int(center_x_right - eye_width / 2 - spacing / 2), int(center_y - eye_height / 2)),
+            QSize(int(eye_width), int(eye_height))))
+        self._left_eye_move.setEndValue(
+            QRect(QPoint(int(center_x - spacing / 2 - eye_width / 2), int(center_y - eye_height / 2)),
+                  QSize(int(eye_width), int(eye_height))))
+        self._left_eye_move.setEasingCurve(QEasingCurve.InOutQuad)
+        self._right_eye_move = QPropertyAnimation(self._right_eye, b'geometry')
+        self._right_eye_move.setDuration(800)
+        self._right_eye_move.setStartValue(
+            QRect(QPoint(int(center_x - eye_width / 2 + spacing / 2), int(center_y - eye_height / 2)),
+                  QSize(int(eye_width), int(eye_height))))
+        self._right_eye_move.setKeyValueAt(0.3, QRect(
+            QPoint(int(center_x_left - eye_width / 2 + spacing / 2), int(center_y - eye_height / 2)),
+            QSize(int(eye_width), int(eye_height))))
+        self._right_eye_move.setKeyValueAt(0.6, QRect(
+            QPoint(int(center_x_right - eye_width / 2 + spacing / 2), int(center_y - eye_height / 2)),
+            QSize(int(eye_width), int(eye_height))))
+        self._right_eye_move.setEndValue(
+            QRect(QPoint(int(center_x - eye_width / 2 + spacing / 2), int(center_y - eye_height / 2)),
+                  QSize(int(eye_width), int(eye_height))))
+        self._right_eye_move.setEasingCurve(QEasingCurve.InOutQuad)
+        self._eye_move.addAnimation(self._left_eye_move)
+        self._eye_move.addAnimation(self._right_eye_move)
+        self._animation.addAnimation(self._eye_move)
+
+    def _loop_animation_start(self):
+        if not self._hover:
+            self._hover_animation.stop()
+            self._animation_timer.stop()
+            self._animation_timer.setInterval(900)
+            self._animation.start()
+            self._animation_timer.start()
+        else:
+            self._animation.stop()
+            self._animation_timer.stop()
+            self._animation_timer.setInterval(2000)
+            self._hover_animation.start()
+            self._animation_timer.start()
+
+    def enterEvent(self, event: QEnterEvent) -> None:
+        self._hover = True
+        self.setCursor(Qt.PointingHandCursor)
+        self._loop_animation_start()
+
+    def leaveEvent(self, event: QEnterEvent) -> None:
+        self._hover = False
+        self.setCursor(Qt.ArrowCursor)
+        self._loop_animation_start()
+
+    def mouseReleaseEvent(self, e: QMouseEvent) -> None:
+        # if the mouse is not in the button, do nothing
+        if not self.rect().contains(int(e.position().x()), int(e.position().y())):
+            return
+        else:
+            self.clicked.emit()
+
+    def paintEvent(self, e: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setPen(QPen(QBrush(QColor('#f2f2f2')), 3))
+        painter.setBrush(QBrush(QColor('#ffffff')))
+        # draw rounded rect
+        painter.drawRoundedRect(self.rect(), 15, 15)
+
+    @staticmethod
+    def copy_animation(source_animation: QPropertyAnimation):
+        target_object = source_animation.targetObject()
+        property_name = source_animation.propertyName()
+        copied_animation = QPropertyAnimation(target_object, property_name)
+        copied_animation.setStartValue(source_animation.startValue())
+        copied_animation.setEndValue(source_animation.endValue())
+        copied_animation.setDuration(source_animation.duration())
+        copied_animation.setEasingCurve(source_animation.easingCurve())
+        return copied_animation

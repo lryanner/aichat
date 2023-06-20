@@ -4,3 +4,4 @@ pandas
 numpy
 requests
 PySideSix-Frameless-Window
+langid

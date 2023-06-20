@@ -2,6 +2,10 @@ import hashlib
 import json
 import logging
 import random
+import time
+import uuid
+
+import langid
 
 import winsound
 
@@ -53,6 +57,10 @@ def copy_file(src, dst):
 def warn(warning):
     print(warning)
     EventCenter.send_event(MainWindowHintEvent(HintType.Warning, warning))
+
+def error(error_):
+    print(error_)
+    EventCenter.send_event(MainWindowHintEvent(HintType.Error, error_))
 
 def info(info_):
     logging.info(info_)
@@ -126,16 +134,16 @@ def has_file(file_path):
     return os.path.exists(file_path)
 
 def get_random_salt():
-    return str(random.randint(32768, 65536))
+    return uuid.uuid4()
 
-def get_md5_sign(text):
-    return hashlib.md5(text).hexdigest()
+def get_md5_sign(text:str):
+    return hashlib.md5(text.encode('utf-8')).hexdigest()
 
-def get_sha256_sign(text):
-    return hashlib.sha256(text).hexdigest()
+def get_sha256_sign(text:str):
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
 def get_time_stamp():
-    return str(int(datetime.now().timestamp()))
+    return int(time.time())
 
 def remove_brackets_content(text):
     """
@@ -150,3 +158,6 @@ def remove_brackets_content(text):
 def get_current_time():
     import datetime
     return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+def detect_language(text):
+    return langid.classify(text)[0]

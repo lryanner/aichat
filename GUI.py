@@ -19,10 +19,12 @@ from data import ConfigData, ChatBotDataList, ChatBotData, MessageData, UserConf
 class AppGUI(FramelessMainWindow):
     """Main window class"""
     _instance = None
+    stopChat = Signal(str)
     Resized = Signal(QSize)  # signal emitted when the window is resized
     ConfigSaved = Signal(ConfigData)  # signal emitted when the config is saved
     ChatBotUpdated = Signal(ChatBotData)  # signal emitted when the chatbot config is updated
     InitFinished = Signal()  # signal emitted when the initialization is finished
+    onChatbotThreadStatusChanged = Signal(str,bool)  # signal emitted when the chatbot thread status is changed
     def __new__(cls, *args, **kwargs):
         """
         The singleton.
@@ -39,6 +41,8 @@ class AppGUI(FramelessMainWindow):
         # apply qss style sheet
         with open('app.qss', 'r') as f:
             self.setStyleSheet(f.read())
+        self.onChatbotThreadStatusChanged.connect(self.on_chatbot_thread_status_changed)
+        # set up the clipboard
         self._clipboard = QApplication.clipboard()
         # create a media player to play the audio
         self._audio_output = QAudioOutput(QMediaDevices.defaultAudioOutput())
@@ -158,8 +162,6 @@ class AppGUI(FramelessMainWindow):
         self._right_bar_layout.addWidget(self._message_area)
         # create a QScrollArea for the message area
         self._message_area_scroll_area = QNoBarScrollArea(self._message_area)
-        self._message_area_scroll_area.verticalScrollBar().rangeChanged.connect(
-            lambda min_, max_: self._message_area_scroll_area.verticalScrollBar().setValue(max_))
         self.ConfigSaved.connect(self._message_area.on_config_updated)
         self.ChatBotUpdated.connect(self._message_area.on_chatbot_updated)
         self._right_bar_layout.addWidget(self._message_area_scroll_area)
@@ -193,6 +195,15 @@ class AppGUI(FramelessMainWindow):
         self._input_box = QMessagePlainTextEdit(200)
         self._input_box.SendMessage.connect(self._send_message)
         self._input_area_layout.addWidget(self._input_box)
+        # create a chatbot running button
+        self._chatbot_running_button = LoadingAnimationButton(self)
+        self._chatbot_running_button.clicked.connect(lambda : QApplication.sendEvent(self, StopChatbotThreadEvent(self._current_chatbot.chatbot_id)))
+        # move it to the button area's center
+        self.Resized.connect(lambda size: self._chatbot_running_button.move(
+            int((size.width() - self._chatbot_running_button.width()) / 2 + 100),
+            int(size.height()  - self._input_box.height()  - 60)))
+        self._chatbot_running_button.hide()
+
 
     def open_global_config_dialog(self, first_time=False):
         """
@@ -325,7 +336,10 @@ class AppGUI(FramelessMainWindow):
             self.close()
             return True
         elif event.type() == event_type.DeleteMessageEventType:
-            self._chatbot_data_list[event.data.chatbot_id].delete_message(event.history_id, event.data)
+            chatbot_id = event.data.chatbot_id
+            if self._chatbot_data_list[event.data.chatbot_id].delete_message(event.history_id, event.data):
+                self._media_player.stop()
+                self.stopChat.emit(chatbot_id)
             QApplication.sendEvent(self, SaveDataEvent(AIChatEnum.DataType.ChatBot))
         return super().eventFilter(obj, event)
 
@@ -364,6 +378,23 @@ class AppGUI(FramelessMainWindow):
         """
         self.ChatBotUpdated.emit(data)
         QApplication.sendEvent(self, SaveDataEvent(AIChatEnum.DataType.ChatBot))
+
+    def on_chatbot_thread_status_changed(self, chatbot_id, status):
+        """
+        the slot for the chatbot thread status changed signal.
+        :param chatbot_id: the id of the chatbot.
+        :param status: the status of the chatbot thread, true for running, false for stopped.
+        :return:
+        """
+        # if not current chatbot, return
+        if not self.current_chatbot or self.current_chatbot.chatbot_id != chatbot_id:
+            return
+        # if the status is running, show the chatbot running button
+        if status:
+            self._chatbot_running_button.show()
+        # if the status is stopped, hide the chatbot running button
+        else:
+            self._chatbot_running_button.hide()
 
     def _switch_current_chatbot(self, id_):
         """
@@ -609,7 +640,9 @@ class MessageArea(QWidget):
         :return:
         """
         if self._current_play_audio and self._current_play_audio != message_data:
-            self.get_message_container(self._current_play_audio).set_play_status(False)
+            current_play_message_container = self.get_message_container(self._current_play_audio)
+            if current_play_message_container:
+                current_play_message_container.set_play_status(False)
         self._current_play_audio = message_data
         message_container = self.get_message_container(message_data)
         message_container.set_play_status(is_playing)
@@ -622,7 +655,9 @@ class MessageArea(QWidget):
         """
         has_file = utils.has_file(f'./download/sounds/{message.message_id}.wav')
         if self._current_play_audio and has_file:
-            self.get_message_container(self._current_play_audio).set_play_status(False)
+            current_play_message_container = self.get_message_container(self._current_play_audio)
+            if current_play_message_container:
+                current_play_message_container.set_play_status(False)
             self._current_play_audio = message
         # if there is not the message file, send speakIt event to the main window
         if not has_file:
@@ -651,7 +686,9 @@ class MessageArea(QWidget):
         """
         if status == QMediaPlayer.EndOfMedia:
             if self._current_play_audio:
-                self.get_message_container(self._current_play_audio).set_play_status(False)
+                current_play_message_container = self.get_message_container(self._current_play_audio)
+                if current_play_message_container:
+                    current_play_message_container.set_play_status(False)
                 self._current_play_audio = None
 
     def on_config_updated(self, data: ConfigData):
@@ -723,7 +760,7 @@ class ChatBotSettingDialog(QInWindowDialog):
         self._setting_button.setObjectName('setting_button')
         self._setting_button.setFixedSize(30, 30)
         # in the first row, there is an avatar label
-        self._avatar_label = QAvatarLabel('./resources/images/test_avatar_me.jpg', 80, editable=True)
+        self._avatar_label = QAvatarLabel('./resources/images/test_avatar_me.jpg', 220, editable=True)
         self._image = './resources/images/test_avatar_me.jpg'
         # if avatar clicked, open a file dialog to select a new avatar
         self._avatar_label.clicked.connect(self._update_avatar)
@@ -978,7 +1015,7 @@ class GlobalSettingDialog(QInWindowDialog):
         self.setting_area_layout.setContentsMargins(30, 15, 30, 15)
         self.setting_area_layout.setSpacing(15)
         # add an avatar label to the setting area
-        self._avatar_label = QAvatarLabel('./resources/images/test_avatar_me.jpg', 100, editable=True)
+        self._avatar_label = QAvatarLabel('./resources/images/test_avatar_me.jpg', 200, editable=True)
         self._avatar_label.clicked.connect(self._update_avatar)
         self._avatar_label.setObjectName('avatar_label')
         self.setting_area_layout.addWidget(self._avatar_label, alignment=Qt.AlignCenter)
@@ -997,7 +1034,7 @@ class GlobalSettingDialog(QInWindowDialog):
         # add a openai setting group
         self._openai_setting_group = OpenAISettingGroup(data.openai_config)
         self.setting_area_layout.addWidget(self._openai_setting_group)
-        self.set_size(500, self._openai_setting_group.sizeHint().height() + 320)
+        self.set_size(500, self._openai_setting_group.sizeHint().height() + 420)
 
         # add a translater setting group
         self._translater_setting_group = TranslaterSettingGroup(data.translater_config)
@@ -1053,7 +1090,7 @@ class GlobalSettingDialog(QInWindowDialog):
                 container_height = container.sizeHint().height()
             else:
                 container.setHidden(True)
-        self.set_size(self._main_content.width(), 320 + container_height)
+        self.set_size(self._main_content.width(), 420 + container_height)
 
     def _save_setting(self):
         """

@@ -684,12 +684,14 @@ class ChatBotData(Data):
 
     def delete_message(self, history_id, message):
         """
-        Delete message from chatbot history
-        :param history_id: the id of history to delete message
-        :param message: the message to delete
-        :return:
+        Delete message from chatbot history.
+        :param history_id: the id of history to delete message.
+        :param message: the message to delete.
+        :return: if the message is the latest one.
         """
+        is_latest = self._histories[history_id].is_latest(message)
         self._histories[history_id].remove(message)
+        return is_latest
 
     def has_history(self, history_id):
         """
@@ -956,6 +958,9 @@ class HistoryData(Data):
 
     def _get_json_safe_data(self):
         return {'memory': self._memory, 'history_list': [message.json_safe_data for message in self._message_list]}
+
+    def is_latest(self, message):
+        return message == self.latest()
 
     def append(self, message):
         self._message_list.append(message)

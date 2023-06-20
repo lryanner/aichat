@@ -6,9 +6,10 @@ from functools import total_ordering
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import QApplication
 
+
 import utils
 from data import ChatBotData, ConfigData, ChatBotDataList, MessageData
-from event import SendMessageEvent, SpeakMessageEvent
+from event import SendMessageEvent, SpeakMessageEvent, ChatBotThreadStatusChangedEvent
 from event_type import SendMessageEventType
 from exceptions import ChatBotException, ChatGPTException
 
@@ -19,8 +20,15 @@ from translater import TranslaterFactory, Translater
 
 
 class ChatBotFactory(QObject):
+    stopChat = Signal(str)
+    configSaved = Signal()
+    stopChatbot = Signal(str)
+
     def __init__(self, config: ConfigData, chatbot_data: ChatBotDataList):
         super().__init__()
+        self.stopChat.connect(self.stop_chat)
+        self.configSaved.connect(self.setup_config)
+        self.stopChatbot.connect(lambda chatbot_id: self.get_chatbot(chatbot_id).stop_generate())
         self._chatbots = []
         self._chatbot_data = chatbot_data
         self._speaker = Speaker(config.vits_config)
@@ -44,6 +52,7 @@ class ChatBotFactory(QObject):
         chatbot = ChatBot(chatbot_data, self._speaker, self._translater_factory, limit_token)
         chatbot.sendMessage.connect(self.send_message)
         chatbot.speak.connect(self.speak_message)
+        chatbot.threadStatusChanged.connect(self.on_chatbot_thread_status_changed)
         self._chatbots.append(chatbot)
 
     def delete_chatbot(self, chatbot_id):
@@ -66,9 +75,9 @@ class ChatBotFactory(QObject):
                 return chatbot
         raise ChatBotException('Chatbot not found.')
 
-    def receive_message(self, history_id, message: MessageData):
+    def receive_message(self, history_id, message: MessageData, is_speak=True):
         receiver = self.get_chatbot(message.chatbot_id)
-        receiver.receive_message(history_id)
+        receiver.receive_message(history_id, is_speak)
 
     def send_message(self, history_id, message: MessageData):
         QApplication.sendEvent(self, SendMessageEvent(history_id, message))
@@ -80,14 +89,29 @@ class ChatBotFactory(QObject):
         receiver = self.get_chatbot(message.chatbot_id)
         receiver.speak_it(history_id, message)
 
+    def on_chatbot_thread_status_changed(self, chatbot_id, status):
+        QApplication.sendEvent(self, ChatBotThreadStatusChangedEvent(chatbot_id, status))
+
+    @Slot(str)
+    def stop_chat(self, chatbot_id):
+        """
+        stop all the thread in the chatbot.
+        :param chatbot_id: chatbot id
+        :return:
+        """
+        self.get_chatbot(chatbot_id).stopGenerate.emit()
+
 
 class ChatThread(QThread):
     sendMessage = Signal(str, MessageData)  # history id, message data
+    stopThread = Signal()
 
     def __init__(self, history_id, chatbot_data):
         super().__init__()
         self._history_id = history_id
         self._chatbot_data = chatbot_data
+        self._is_running = True
+        self.stopThread.connect(self.stop)
 
     def run(self) -> None:
         # send request
@@ -108,25 +132,32 @@ class ChatThread(QThread):
                 messages=messages,
                 **self._chatbot_data.gpt_params.data
             )
+            translate_result = response['choices'][0]['message']['content']
         except Exception as e:
-            raise ChatGPTException(e)
+            translate_result = None
+            if self._is_running:
+                utils.warn(e)
         # handle response
         # total_tokens = response['usage']['total_tokens']
-        result = response['choices'][0]['message']['content']
-        # add message
-        response = MessageData(
-            chatbot_id=self._chatbot_data.chatbot_id,
-            message=result,
-            send_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            is_user=False,
-            name=self._chatbot_data.character.name
-        )
-        self._chatbot_data.append_message(response, self._history_id)
-        self.sendMessage.emit(self._history_id, response)
+        if translate_result and self._is_running:
+            # add message
+            response = MessageData(
+                chatbot_id=self._chatbot_data.chatbot_id,
+                message=translate_result,
+                send_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                is_user=False,
+                name=self._chatbot_data.character.name
+            )
+            self._chatbot_data.append_message(response, self._history_id)
+            self.sendMessage.emit(self._history_id, response)
+
+    def stop(self):
+        self._is_running = False
 
 
 class SpeakThread(QThread):
     speak = Signal(MessageData)
+    stopThread = Signal()
 
     def __init__(self, message_data: MessageData, speaker: Speaker, text, context, raw_text):
         super().__init__()
@@ -135,6 +166,8 @@ class SpeakThread(QThread):
         self._text = text
         self._context = context
         self._raw_text = raw_text
+        self._is_running = True
+        self.stopThread.connect(self.stop)
 
     def run(self) -> None:
         # emotion, nsfw = ChatBot.get_emotion_from_gpt(self._message_data.message)
@@ -144,30 +177,66 @@ class SpeakThread(QThread):
         path, emotion_sample = self._speaker.speak(self._text, id_=0, context=self._context, raw_text=self._raw_text)
         if not path or not emotion_sample:
             return
-        # rename the path to message_id
-        utils.rename_file(path, self._message_data.message_id + '.wav')
-        self.speak.emit(self._message_data)
+        if self._is_running:
+            # rename the path to message_id
+            utils.rename_file(path, self._message_data.message_id + '.wav')
+            self.speak.emit(self._message_data)
+
+    def stop(self):
+        self._is_running = False
 
 
 class TranslateThread(QThread):
     translate = Signal(MessageData, str)
+    stopThread = Signal()
 
     def __init__(self, message_data: MessageData, translater: Translater):
         super().__init__()
         self._message_data = message_data
         self._translater = translater
+        self._is_running = True
+        self.stopThread.connect(self.stop)
 
     def run(self) -> None:
         # remove the content in ()
         text = utils.remove_brackets_content(self._message_data.message)
         result = self._translater.translate(text)
-        self.translate.emit(self._message_data, result)
+        if self._is_running:
+            self.translate.emit(self._message_data, result)
+
+    def stop(self):
+        self._is_running = False
+
+
+class ThreadHolder(QObject):
+    empty = Signal()
+    loaded = Signal()
+    removeThread = Signal(QThread)
+    def __init__(self):
+        super().__init__()
+        self._threads = []
+        self.removeThread.connect(self.remove)
+
+    def __iter__(self):
+        return iter(self._threads)
+
+    def append(self, __object) -> None:
+        self._threads.append(__object)
+        if len(self._threads) == 1:
+            self.loaded.emit()
+
+    def remove(self, __value) -> None:
+        self._threads.remove(__value)
+        if not self._threads:
+            self.empty.emit()
 
 
 class ChatBot(QObject):
     """The chatbot."""
     sendMessage = Signal(str, MessageData)  # history id, message data
     speak = Signal(str, MessageData)  # history id, message data
+    stopGenerate = Signal()
+    threadStatusChanged = Signal(str, bool)  # chatbot id, is running
 
     def __init__(self, chatbot_data: ChatBotData, speaker, translater_factory, limit_token=3400):
         """
@@ -179,31 +248,37 @@ class ChatBot(QObject):
         :param limit_token: int, the limit token, default 3400.
         """
         super().__init__()
+        self.stopGenerate.connect(self.stop_generate)
         self._chatbot_data: ChatBotData = chatbot_data
         self._speaker = speaker
         self._translater_factory = translater_factory
-        self._chat_thread = None
-        self._speak_thread = None
-        self._translate_thread = None
+        self._thread_holder = ThreadHolder()
+        self._thread_holder.empty.connect(lambda : self.threadStatusChanged.emit(self.chatbot_id, False))
+        self._thread_holder.loaded.connect(lambda : self.threadStatusChanged.emit(self.chatbot_id, True))
 
     @property
     def chatbot_id(self) -> str:
         return self._chatbot_data.chatbot_id
 
     # use openai module to chat
-    def receive_message(self, history_id):
+    def receive_message(self, history_id, is_speak:bool=True):
         """Uses openai module to chat"""
+        # if the chat thread is running, stop it
+        self.stop_generate()
         # use a thread to chat
-        self._chat_thread = ChatThread(history_id, self._chatbot_data)
-        self._chat_thread.sendMessage.connect(self.speak_it)
-        self._chat_thread.sendMessage.connect(self.sendMessage)
-        self._chat_thread.start()
+        chat_thread = ChatThread(history_id, self._chatbot_data)
+        chat_thread.finished.connect(lambda:self._thread_holder.removeThread.emit(chat_thread))
+        if is_speak:
+            chat_thread.sendMessage.connect(self.speak_it)
+        chat_thread.sendMessage.connect(self.sendMessage)
+        self._thread_holder.append(chat_thread)
+        chat_thread.start()
 
     @Slot(str, MessageData)
     def speak_it(self, history_id, message_data: MessageData):
         """Speaks the message"""
 
-        def speak_it_after_translate(_message_data: MessageData, result: str, context=None, raw_text=None):
+        def speak_it_now(_message_data: MessageData, result: str, context=None, raw_text=None):
             """
             Speaks the message after translating.
             :param _message_data: message data.
@@ -212,28 +287,40 @@ class ChatBot(QObject):
             :param raw_text: the raw text which is not translated.
             :return:
             """
-            self._speak_thread = SpeakThread(_message_data, self._speaker, result, context, raw_text)
-            self._speak_thread.speak.connect(lambda: self.speak.emit(history_id, _message_data))
-            self._speak_thread.start()
+            if not result:
+                return
+            self.stop_generate()
+            speak_thread = SpeakThread(_message_data, self._speaker, result, context, raw_text)
+            speak_thread.finished.connect(lambda: self._thread_holder.removeThread.emit(speak_thread))
+            speak_thread.speak.connect(lambda: self.speak.emit(history_id, _message_data))
+            self._thread_holder.append(speak_thread)
+            speak_thread.start()
 
-        import langid
-        lang = langid.classify(message_data.message)[0]
+        lang = utils.detect_language(message_data.message)
         context_ = self._chatbot_data.get_history(history_id).latest_n(5)
         context_ = [utils.remove_brackets_content(message.message) for message in context_]
         context_ = '\n'.join(context_)
         raw_text = message_data.message
         if lang == 'ja':
-            speak_it_after_translate(message_data, utils.remove_brackets_content(message_data.message), context_,
+            speak_it_now(message_data, utils.remove_brackets_content(message_data.message), context_,
                                      raw_text)
         else:
             # translate the message
 
-            self._translate_thread = TranslateThread(message_data, self._translater_factory.active_translater)
-            self._translate_thread.translate.connect(
-                lambda message_data, result: speak_it_after_translate(message_data, result, context_, raw_text))
-            self._translate_thread.start()
+            translate_thread = TranslateThread(message_data, self._translater_factory.active_translater)
+            translate_thread.finished.connect(lambda : self._thread_holder.removeThread.emit(translate_thread))
+            translate_thread.translate.connect(
+                lambda _message_data, result: speak_it_now(_message_data, result, context_, raw_text))
+            self._thread_holder.append(translate_thread)
+            translate_thread.start()
+
+    def stop_generate(self):
+        if self._thread_holder:
+            for thread in self._thread_holder:
+                thread.stopThread.emit()
 
     def summarize(self):
+        # todo: fix this.
         """Summarizes the chat history"""
         # model and message
         message = [{'role': 'system',

@@ -291,7 +291,7 @@ QLabel{
 QScrollBar:vertical {
     background: transparent;
     border: none;
-    border-image: url(":/imgs/imgs/scrollBar/scroll bar-bg.png");
+/*    border-image: url(":/imgs/imgs/scrollBar/scroll bar-bg.png");*/
     margin: 0px 0px 0px 0px;
     width: 3px;
 }

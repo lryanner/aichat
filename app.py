@@ -47,7 +47,7 @@ class App(QObject):
             self.data_loader.save_data(event.data_type)
         elif event.type() == SendMessageEventType:
             if isinstance(obj, AppGUI):
-                self.chatbot_factory.receive_message(event.history_id, event.message)
+                self.chatbot_factory.receive_message(event.history_id, event.message, event.is_speak)
             if isinstance(obj, ChatBotFactory):
                 self.gui.receive_message(event.history_id, event.message)
         elif event.type() == SpeakMessageEventType:
@@ -59,6 +59,10 @@ class App(QObject):
             self.chatbot_factory.create_chatbot(event.data)
         elif event.type() == DeleteChatBotEventType:
             self.chatbot_factory.delete_chatbot(event.chatbot_id)
+        elif event.type() == ChatBotThreadStatusChangedEventType:
+            self.gui.onChatbotThreadStatusChanged.emit(event.chatbot_id, event.status)
+        elif event.type() == StopChatbotThreadEventType:
+            self.chatbot_factory.stopChatbot.emit(event.chatbot_id)
         return super().eventFilter(obj, event)
 
     def event(self, e):
@@ -70,7 +74,6 @@ class App(QObject):
     def init_gui(self, event: QEvent):
         self.gui = AppGUI(event.config_data, event.chatbots_data)
         self.gui.InitFinished.connect(lambda : self.init_chatbot_factory(event))
-        self.gui.ConfigSaved.connect(lambda : self.chatbot_factory.setup_config())
         self.gui.installEventFilter(self)
         if event.first_time:
             self.gui.open_global_config_dialog(first_time=True)
@@ -80,6 +83,8 @@ class App(QObject):
 
     def init_chatbot_factory(self, event: QEvent):
         self.chatbot_factory = ChatBotFactory(event.config_data, event.chatbots_data)
+        self.gui.ConfigSaved.connect(self.chatbot_factory.configSaved)
+        self.gui.stopChat.connect(self.chatbot_factory.stopChat)
         self.chatbot_factory.installEventFilter(self)
 
     @staticmethod

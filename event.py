@@ -180,10 +180,11 @@ class SendMessageEvent(QEvent):
     :param message: the message to be sent.
     """
 
-    def __init__(self, history_id, message):
+    def __init__(self, history_id, message, is_speak=True):
         super().__init__(QEvent.User)
         self._message = message
         self._history_id = history_id
+        self._is_speak = is_speak
 
     def type(self):
         return SendMessageEventType
@@ -195,6 +196,10 @@ class SendMessageEvent(QEvent):
     @property
     def message(self):
         return self._message
+
+    @property
+    def is_speak(self):
+        return self._is_speak
 
 
 class SpeakMessageEvent(QEvent):
@@ -218,3 +223,42 @@ class SpeakMessageEvent(QEvent):
     @property
     def message(self):
         return self._message
+
+
+class ChatBotThreadStatusChangedEvent(QEvent):
+    """
+    This event is used to notify that the chatbot thread status is changed.
+    :param chatbot_id: the id of the chatbot.
+    :param status: the status of the chatbot thread.
+    """
+    def __init__(self, chatbot_id, status):
+        super().__init__(QEvent.User)
+        self._chatbot_id = chatbot_id
+        self._status = status
+
+    def type(self):
+        return ChatBotThreadStatusChangedEventType
+
+    @property
+    def chatbot_id(self):
+        return self._chatbot_id
+
+    @property
+    def status(self):
+        return self._status
+
+class StopChatbotThreadEvent(QEvent):
+    """
+    This event is used to stop the chatbot thread.
+    :param chatbot_id: the id of the chatbot.
+    """
+    def __init__(self, chatbot_id):
+        super().__init__(QEvent.User)
+        self._chatbot_id = chatbot_id
+
+    def type(self):
+        return StopChatbotThreadEventType
+
+    @property
+    def chatbot_id(self):
+        return self._chatbot_id
